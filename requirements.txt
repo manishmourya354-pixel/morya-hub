@@ -1,5 +1,6 @@
-streamlit
+nicegui
 supabase
 pandas
 python-dotenv
 httpx
+requests
