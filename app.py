@@ -8,10 +8,8 @@ import os
 
 # --- SUPABASE CONFIGURATION ---
 from supabase import create_client, Client
-SUPABASE_URL = "https://imbxrcjhqpriqilncowh.supabase.co"  
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltYnhyY2pocXByaXFpbG5jb3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTA3OTksImV4cCI6MjA5NTg2Njc5OX0.2bq5HrU2_i0gjxxdA_2i4N7JRga-9UR5pK4nnHc7inI"
-print("SUPABASE_URL =", SUPABASE_URL)
-print("SUPABASE_KEY exists =", bool(SUPABASE_KEY))
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 FIREBASE_SERVER_KEY = os.environ.get("FIREBASE_SERVER_KEY")
 
