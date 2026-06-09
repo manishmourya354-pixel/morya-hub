@@ -3,6 +3,7 @@ from datetime import datetime
 import asyncio
 import urllib.parse
 import requests
+import os
 
 
 # --- SUPABASE CONFIGURATION ---
