@@ -11,6 +11,7 @@ from supabase import create_client, Client
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+FIREBASE_SERVER_KEY = os.environ.get("FIREBASE_SERVER_KEY")
 
 class MasterHubState:
     def __init__(self):
@@ -478,7 +479,7 @@ def main_page():
             requests.post(
                 "https://fcm.googleapis.com/fcm/send",
                 headers={
-                    "Authorization": "key=YOUR_FIREBASE_SERVER_KEY",
+                    "Authorization": f"key={FIREBASE_SERVER_KEY}",
                     "Content-Type": "application/json",},
                 json={
                     "to": token,
