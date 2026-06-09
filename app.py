@@ -1872,4 +1872,5 @@ def main_page():
             main_container()
 
 if __name__ in {"__main__", "__mp_main__"}:
+    app.add_static_files('/static', 'static')
     ui.run(title='Morya Mobile Hub', port=8080, host='0.0.0.0', storage_secret='morya_master_999')
