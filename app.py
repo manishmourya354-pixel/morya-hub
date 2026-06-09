@@ -10,6 +10,8 @@ import os
 from supabase import create_client, Client
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+print("SUPABASE_URL =", SUPABASE_URL)
+print("SUPABASE_KEY exists =", bool(SUPABASE_KEY))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 FIREBASE_SERVER_KEY = os.environ.get("FIREBASE_SERVER_KEY")
 
