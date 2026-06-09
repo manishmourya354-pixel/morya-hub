@@ -8,8 +8,8 @@ import os
 
 # --- SUPABASE CONFIGURATION ---
 from supabase import create_client, Client
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_URL = "https://imbxrcjhqpriqilncowh.supabase.co"  
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltYnhyY2pocXByaXFpbG5jb3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTA3OTksImV4cCI6MjA5NTg2Njc5OX0.2bq5HrU2_i0gjxxdA_2i4N7JRga-9UR5pK4nnHc7inI"
 print("SUPABASE_URL =", SUPABASE_URL)
 print("SUPABASE_KEY exists =", bool(SUPABASE_KEY))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -342,7 +342,7 @@ def main_page():
 
 
     def share_bill_on_whatsapp(bill_exists, renter_id):
-            import urllib.parse
+            from urllib.parse  import quote
             
             # 1. WhatsApp Number Fetch (public_members table se)
             whatsapp_no = "" 
@@ -365,14 +365,15 @@ def main_page():
                 return
             
             # 2. Message Formatting
+            unit_name = "kWh" if bill_exists.get('bill_type') == "Electric" else "Unit"
             msg = f"""*🧾 Meena Residency Bill - {bill_exists.get('bill_month', 'N/A')}*
             
             *--- Bill Details ---*
             📅 Prev Date: {bill_exists.get('prev_reading_date', 'N/A')}
-            📈 Prev Reading: {bill_exists.get('prev_reading', '0')} kWh
+            📈 Prev Reading: {bill_exists.get('prev_reading', '0')} {unit_name}
             
             📅 Curr Date: {bill_exists.get('curr_reading_date', 'N/A')}
-            📈 Curr Reading: {bill_exists.get('curr_reading', '0')} kWh
+            📈 Curr Reading: {bill_exists.get('curr_reading', '0')} {unit_name}
             
             *--- Calculation ---*
             ⚡ Rate: ₹{bill_exists.get('rate_per_unit', '0')}
@@ -385,9 +386,9 @@ def main_page():
             """
             
             # 3. WhatsApp URL Open
-            encoded_msg = urllib.parse.quote(msg)
-            ui.navigate.to(f"https://wa.me/{whatsapp_no}?text={encoded_msg}", new_tab=True)
+            encoded = urllib.parse.quote(msg)
 
+            ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",new_tab=True)
     def share_current_rent_whatsapp(rent_row, renter_id):
             try:
                 member = (
@@ -414,9 +415,8 @@ def main_page():
         💰 *Total Due : ₹{rent_row.get('total_charge',0)}*
         """
                 encoded = urllib.parse.quote(msg)
-                ui.navigate.to(
-                    f"https://wa.me/{whatsapp_no}?text={encoded}",
-                    new_tab=True)
+                ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",new_tab=True)
+                    
             except Exception as e:
                 ui.notify(str(e))
                 print(e)
@@ -463,10 +463,8 @@ def main_page():
 
                 encoded = urllib.parse.quote(msg)
 
-                ui.navigate.to(
-                    f"https://wa.me/{whatsapp_no}?text={encoded}",
-                    new_tab=True
-                )
+                ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",  new_tab=True)
+                
     def send_push(renter_id, title, body):
         try:
             res = (
@@ -641,7 +639,45 @@ def main_page():
                             with ui.row().classes( 'w-full items-center justify-between' ):
                                 ui.label(f'🏠 Room {room}').classes( 'font-bold text-green-800' )
                                 ui.label(head_name).classes('text-xs text-gray-600 font-medium')
+                    if state.selected_meena_tab == "publish_notice":
+                        notice_text = ""
 
+                        try:
+                            res = (
+                                supabase.table("hub_users")
+                                .select("notice")
+                                .eq("email", state.user_email)
+                                .single()
+                                .execute())
+                            if res.data:
+                                notice_text = res.data.get("notice") or ""
+                        except:
+                            pass
+                        edit_mode = {"value": False if notice_text else True}
+                        @ui.refreshable
+                        def notice_ui():
+                            if edit_mode["value"]:
+                                notice_box = ui.textarea(  label="Enter Notice" ).props(   'outlined autogrow  counter maxlength=2000' ).classes( "w-full")
+                                notice_box.value = notice_text
+                                def save_notice():
+                                    nonlocal notice_text
+                                    supabase.table("hub_users").update({ "notice": notice_box.value }).eq("email",  state.user_email).execute()
+                                    notice_text = notice_box.value
+                                    ui.notify("Notice Saved")
+                                    edit_mode["value"] = False
+                                    notice_ui.refresh()
+                                ui.button( "Save Notice",  on_click=save_notice ).classes("w-full bg-green-700 text-white"  )
+                            else:
+                                with ui.card().classes(
+                                     'w-full p-4 border-l-4 border-orange-500 bg-orange-50' ):
+                                    ui.label(  "📢 Public Notice").classes( 'text-lg font-bold text-orange-800')
+                                    ui.label(notice_text if notice_text else "No Notice").classes(  'whitespace-pre-wrap text-gray-800')
+                                def edit_notice():
+                                    edit_mode["value"] = True
+                                    notice_ui.refresh()
+                                ui.button( "✏ Edit Notice",on_click=edit_notice  ).classes(  "w-full bg-orange-600 text-white" )
+                        notice_ui()   
+                        return
                     # Ground Floor
                     with ui.card().classes('w-full p-3 bg-green-50'):
                         ui.label('Ground Floor').classes(
@@ -1495,13 +1531,14 @@ def main_page():
                                             ui.label("Koi payment record nahi mila.").classes('text-gray-400 text-center w-full mt-5')
                                         else:
                                             for p in payment_data:
-                                                # Data Extraction
                                                 amt = p.get('deposite', 0)
                                                 d_date = p.get('deposit_date') if p.get('deposit_date') else "N/A"
                                                 status = p.get('deposit_status') if p.get('deposit_status') else "Pending"
                                                 
                                                 # Expansion Box
-                                                status = str(p.get('deposit_status') or 'Pending')
+                                                status = str(p.get('deposit_status') or '').strip()
+                                                if not status:
+                                                    continue
                                                 ball = "🟢" if status.lower() == "approved" else "🔴"
                                                 title = (f"{p.get('bill_month')} {p.get('bill_year')} "
                                                         f"- {status} {ball}")
@@ -1575,7 +1612,7 @@ def main_page():
                                     ui.button('🔔 REQUESTED', on_click=lambda: (setattr(state, 'billing_tab', 'requested'), main_container.refresh())) \
                                         .classes('flex-1 font-bold text-[10px] h-9').props(f'flat' if state.billing_tab != 'requested' else 'unelevated color="amber-800" text-color=white')
                                 if state.billing_tab == "current":
-                                    c_prev_read, c_prev_date = "0", "N/A"
+                                    c_prev_read, c_prev_date = "0", None
                                     bill_exists = None
                                     
                                     # Fetch Data
@@ -1787,6 +1824,10 @@ def main_page():
                         # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
                         # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
                         elif state.room_sub_tab == "settings":
+                            rent_row = supabase.table( "renters").select(  "setting_tab").eq("id", state.renter_id).single().execute()
+                            setting_json = rent_row.data.get("setting_tab") or {}
+                            state.electric_history_enabled = setting_json.get( "electric_history_enabled", True)
+                            state.gas_history_enabled = setting_json.get( "gas_history_enabled",True)                                                  
                             with ui.card().classes('p-4 w-full max-w-4xl shadow-md mx-auto mt-2 bg-white gap-3'):
                                 with ui.column().classes('w-full bg-slate-50 border p-3 rounded-xl gap-1 items-center justify-center text-center'):
                                     # --- STATUS TOGGLE ENGINE ---
@@ -1814,11 +1855,20 @@ def main_page():
                                 
                                 with ui.expansion('Electric History Configuration', icon='bolt').classes('w-full border rounded-lg bg-gray-50'):
                                     with ui.row().classes('w-full p-3 items-center justify-between bg-white rounded-b-lg'):
-                                        ui.switch('Show History Data Tab', value=state.electric_history_enabled, on_change=lambda e: setattr(state, 'electric_history_enabled', e.value)).props('dense color=green').classes('text-sm font-medium')
-                                
+                                        def save_electric_toggle(e):
+                                            state.electric_history_enabled = e.value
+                                            supabase.table('renters').update({ "setting_tab": {
+                                                    "electric_history_enabled": e.value,
+                                                    "gas_history_enabled": state.gas_history_enabled } }).eq(  "id",  state.renter_id ).execute()
+                                        ui.switch('Show History Data Tab', value=state.electric_history_enabled,on_change=save_electric_toggle)
                                 with ui.expansion('Gas History Configuration', icon='local_fire_department').classes('w-full border rounded-lg bg-gray-50 mt-1'):
                                     with ui.row().classes('w-full p-3 items-center justify-between bg-white rounded-b-lg'):
-                                        ui.switch('Show History Data Tab', value=state.gas_history_enabled, on_change=lambda e: setattr(state, 'gas_history_enabled', e.value)).props('dense color=green').classes('text-sm font-medium')
+                                        def save_gas_toggle(e):
+                                            state.gas_history_enabled = e.value
+                                            supabase.table('renters').update({ "setting_tab": {
+                                                    "electric_history_enabled": state.electric_history_enabled,
+                                                    "gas_history_enabled": e.value  } }).eq( "id", state.renter_id ).execute()
+                                        ui.switch('Show History Data Tab', value=state.gas_history_enabled , on_change=save_gas_toggle)
                 # 🎓 SCREEN 5: EDUCATION PORTAL
                 elif state.current_screen == "education_view":
                     ui.label("Education Portal").classes('text-base font-black text-slate-800 w-full')
