@@ -4,10 +4,12 @@ import asyncio
 import urllib.parse
 import requests
 import os
+from nicegui import ui
 
 
 # --- SUPABASE CONFIGURATION ---
 from supabase import create_client, Client
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -18,7 +20,7 @@ class MasterHubState:
         self.is_logged_in = app.storage.user.get('logged_in', False)
         self.user_email = app.storage.user.get('email', '')
         self.current_screen = "main_hub" 
-        self.current_screen = "dashboard"
+        
         # --- AUTH & ROLE STATES ---
         self.email = ""
         self.user_email = ""
@@ -45,7 +47,17 @@ class MasterHubState:
         self.active_renter_head_id = None
         self.renter_id = None
         self.room_no = None
-        
+        # meter scan
+        # Meter Scanner
+        self.scanned_room = ""
+        self.scanned_bill_type = ""
+        self.scanned_renter_id = ""
+        self.scanned_renter_name = ""
+        self.scanned_meter_photo = None
+        self.ocr_current_reading = ""
+        self.scanned_image_url = ""
+
+
         # Room ke sabhi heads (Active + History) load karne ke liye dropdown state
         self.room_heads_options = []
         self.selected_head_option = None
@@ -540,6 +552,7 @@ def main_page():
         with ui.column().classes('w-full p-4 gap-4 flex-grow overflow-y-auto'):
             @ui.refreshable
             def main_container():
+                global ui
                 if not state.is_logged_in:
                     with ui.card().classes('w-full p-6 items-center justify-center text-center bg-white border-none rounded-2xl shadow-xs mx-auto mt-10'):
                         ui.icon('lock', size='4rem').classes('text-green-700')
@@ -583,8 +596,7 @@ def main_page():
                     with ui.column().classes('w-full gap-3'):
                         ui.button('🏢 Rental Detail', on_click=lambda: (fetch_realtime_rooms(), setattr(state, 'current_screen', 'meena_room_select'), setattr(state, 'selected_meena_tab', 'rental_detail'), setattr(state, 'selected_room', None), setattr(state, 'room_sub_tab', None), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
                         ui.button('📢 Publish Notice', on_click=lambda: (fetch_realtime_rooms(), setattr(state, 'current_screen', 'meena_room_select'), setattr(state, 'selected_meena_tab', 'publish_notice'), setattr(state, 'selected_room', None), setattr(state, 'room_sub_tab', None), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
-                        ui.button('📂 Other Utilities', on_click=lambda: (fetch_realtime_rooms(), setattr(state, 'current_screen', 'meena_room_select'), setattr(state, 'selected_meena_tab', 'other'), setattr(state, 'selected_room', None), setattr(state, 'room_sub_tab', None), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
-
+                        ui.button('📷 Meter Scanner', on_click=lambda: ( setattr(state, 'current_screen', 'meter_scanner'), main_container.refresh() )).props('unelevated color=green-700').classes('meena-main-btn')
                 # 📥 SCREEN 3: SELECT ROOM DROPBOX ONLY SCREEN
                 elif state.current_screen == "meena_room_select":
                     with ui.row().classes('w-full justify-between items-center mb-2'):
@@ -715,6 +727,348 @@ def main_page():
                         with ui.column().classes('w-full gap-2 mt-2'):
                             room_box('7')
                         
+
+                elif state.current_screen == "meter_scanner":
+
+                    from urllib.parse import unquote
+                    import uuid
+
+                    ui.button(
+                        '⬅ Back',
+                        on_click=lambda: (
+                            setattr(state, 'current_screen', 'meena_tabs'),
+                            main_container.refresh()
+                        )
+                    ).classes('w-full mb-3')
+
+                    ui.label(
+                        '📷 Meter Scanner'
+                    ).classes(
+                        'text-xl font-bold text-green-800'
+                    )
+
+                    def process_meter_qr(qr):
+
+                        try:
+
+                            qr = unquote(str(qr).strip())
+
+                            parts = qr.split('|')
+
+                            room_no = parts[0].replace(
+                                'ROOM=',
+                                ''
+                            ).strip()
+
+                            bill_type = parts[1].replace(
+                                'TYPE=',
+                                ''
+                            ).strip()
+
+                            renter = (
+                                supabase.table('renters')
+                                .select('*')
+                                .eq('room_no', room_no)
+                                .eq('status', 'ACTIVE')
+                                .single()
+                                .execute()
+                            )
+
+                            if not renter.data:
+                                ui.notify(
+                                    'No active renter found',
+                                    type='negative'
+                                )
+                                return
+
+                            state.scanned_room = room_no
+                            state.scanned_bill_type = bill_type
+                            state.scanned_renter_id = renter.data['id']
+
+                            head_id = renter.data.get(
+                                'head_member_id'
+                            )
+
+                            state.active_renter_head_id = head_id
+
+                            state.scanned_renter_name = ''
+
+                            if head_id:
+
+                                member = (
+                                    supabase.table('public_members')
+                                    .select('name')
+                                    .eq('id', head_id)
+                                    .single()
+                                    .execute()
+                                )
+
+                                if member.data:
+                                    state.scanned_renter_name = (
+                                        member.data['name']
+                                    )
+
+                        except Exception as ex:
+
+                            ui.notify(
+                                str(ex),
+                                type='negative'
+                            )
+
+                    # URL PARAMETER AUTO READ
+                    try:
+
+                        meter_qr = ui.context.client.request.query_params.get(
+                            'meter_qr',
+                            ''
+                        )
+
+                        if meter_qr and not state.scanned_room:
+                            process_meter_qr(meter_qr)
+
+                    except:
+                        pass
+
+                    if not state.scanned_room:
+
+                        with ui.card().classes(
+                            'w-full p-4 bg-orange-50'
+                        ):
+                            ui.label(
+                                'QR Scan ka wait ho raha hai...'
+                            ).classes(
+                                'font-bold text-orange-700'
+                            )
+
+                            ui.label(
+                                'Kodular se URL open karein'
+                            ).classes(
+                                'text-xs text-gray-600'
+                            )
+
+                    if state.scanned_room:
+
+                        ui.separator()
+
+                        ui.input(
+                            'Room No',
+                            value=state.scanned_room
+                        ).props('readonly')
+
+                        ui.input(
+                            'Renter ID',
+                            value=str(state.scanned_renter_id)
+                        ).props('readonly')
+
+                        ui.input(
+                            'Head Name',
+                            value=state.scanned_renter_name
+                        ).props('readonly')
+
+                        ui.input(
+                            'Bill Type',
+                            value=state.scanned_bill_type
+                        ).props('readonly')
+
+                        ui.input(
+                            'Month',
+                            value=state.selected_month
+                        ).props('readonly')
+
+                        ui.input(
+                            'Year',
+                            value=str(datetime.now().year)
+                        ).props('readonly')
+
+                        reading_input = ui.input(
+                            'Current Reading'
+                        ).props(
+                            'outlined type=number'
+                        ).classes('w-full')
+
+                        async def upload_meter(e):
+
+                            try:
+
+                                file_bytes = e.content.read()
+
+                                file_name = (
+                                    f"meter_{uuid.uuid4()}.jpg"
+                                )
+
+                                supabase.storage.from_(
+                                    "utility-bills"
+                                ).upload(
+                                    path=file_name,
+                                    file=file_bytes,
+                                    file_options={
+                                        "content-type":
+                                        "image/jpeg"
+                                    }
+                                )
+
+                                public_url = (
+                                    supabase.storage
+                                    .from_("utility-bills")
+                                    .get_public_url(file_name)
+                                )
+
+                                state.scanned_image_url = public_url
+
+                                ui.notify(
+                                    'Photo Uploaded'
+                                )
+
+                            except Exception as ex:
+
+                                ui.notify(
+                                    str(ex),
+                                    type='negative'
+                                )
+
+                        ui.upload(
+                            label='Meter Photo',
+                            auto_upload=True,
+                            on_upload=upload_meter
+                        ).props(
+                            'accept=image/*'
+                        ).classes('w-full')
+
+                        def submit_meter():
+                            if not state.scanned_image_url:
+                                ui.notify('Meter photo required')
+                                return
+
+                            if not reading_input.value:
+                                ui.notify('Enter current reading')
+                                return
+
+
+                            try:
+
+                                prev_reading = 0
+
+                                try:
+
+                                    prev = (
+                                        supabase.table(
+                                            'utility_billing_ledger'
+                                        )
+                                        .select('*')
+                                        .eq(
+                                            'renter_id',
+                                            state.scanned_renter_id
+                                        )
+                                        .eq(
+                                            'bill_type',
+                                            state.scanned_bill_type
+                                        )
+                                        .order(
+                                            'id',
+                                            desc=True
+                                        )
+                                        .limit(1)
+                                        .execute()
+                                    )
+
+                                    if prev.data:
+
+                                        prev_reading = float(
+                                            prev.data[0].get(
+                                                'curr_reading',
+                                                0
+                                            )
+                                        )
+
+                                except:
+                                    pass
+
+                                payload = {
+
+                                    "renter_id":
+                                    state.scanned_renter_id,
+
+                                    "room_no":
+                                    state.scanned_room,
+
+                                    "head_id":
+                                    state.active_renter_head_id,
+
+                                    "bill_type":
+                                    state.scanned_bill_type,
+
+                                    "bill_month":
+                                    state.selected_month,
+
+                                    "bill_year":
+                                    datetime.now().year,
+
+                                    "prev_reading":
+                                    prev_reading,
+
+                                    "prev_reading_date":
+                                    datetime.now().strftime(
+                                        "%Y-%m-%d"
+                                    ),
+
+                                    "curr_reading":
+                                    float(
+                                        reading_input.value
+                                    ),
+
+                                    "curr_reading_date":
+                                    datetime.now().strftime(
+                                        "%Y-%m-%d"
+                                    ),
+
+                                    "status":
+                                    "Pending",
+
+                                    "rate_per_unit":
+                                    7.50,
+
+                                    "bill_img_url":
+                                    state.scanned_image_url
+
+                                }
+
+                                supabase.table(
+                                    'utility_billing_ledger'
+                                ).insert(
+                                    payload
+                                ).execute()
+
+                                ui.notify(
+                                    'Meter Saved Successfully',
+                                    type='positive'
+                                )
+
+                                state.scanned_room = ""
+                                state.scanned_bill_type = ""
+                                state.scanned_renter_id = ""
+                                state.scanned_renter_name = ""
+                                state.scanned_image_url = ""
+
+                                main_container.refresh()
+
+                            except Exception as ex:
+
+                                ui.notify(
+                                    str(ex),
+                                    type='negative'
+                                )
+                        
+                        ui.button(
+                            '✅ Submit Meter',
+                            on_click=submit_meter
+                        ).classes(
+                            'w-full bg-orange-600 text-white'
+                        )
+
+                    
+                        
+                    
+                            
                 # 🚪 SCREEN 4: HOBAHOO MEENA ORIGINAL WEBPAGE ENGINE CODES
                 elif state.current_screen == "meena_original_webpage":
                     # REALTIME DATA MAPPING INJECTOR BASED ON THE SELECTED HEAD OPTIONS
