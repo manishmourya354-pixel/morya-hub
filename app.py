@@ -9,7 +9,6 @@ from nicegui import ui
 
 # --- SUPABASE CONFIGURATION ---
 from supabase import create_client, Client
-
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -203,18 +202,9 @@ def main_page():
         except Exception as e:
             print(f"Room fetch error: {e}")
             state.available_rooms = []
-
-    # DYNAMIC RENTER HEAD SELECTOR ENGINE (Active wale upar, Left wale neeche)
     def fetch_room_heads_history(room_no_val):
             try:
-                renters = supabase.table(
-                    'renters'
-                ).select(
-                    'id,status,head_member_id,created_at'
-                ).eq(
-                    'room_no', room_no_val
-                ) .order('created_at',desc=True
-                ).execute()
+                renters = supabase.table('renters' ).select( 'id,status,head_member_id,created_at'  ).eq('room_no', room_no_val) .order('created_at',desc=True).execute()
                 options_list = []
                 active_option = None
                 for row in renters.data or []:
@@ -224,51 +214,33 @@ def main_page():
                     head_id = row.get('head_member_id')
                     if head_id:
                         try:
-                            h = supabase.table(
-                                'public_members'
-                            ).select(
-                                'name'
-                            ).eq(
-                                'id', head_id
-                            ).single().execute()
-
+                            h = supabase.table(   'public_members'  ).select('name' ).eq(  'id', head_id ).single().execute()
                             if h.data:
                                 head_name = h.data.get('name', 'Unknown Head')
                         except Exception:
-                            pass
-                    
+                            pass          
                     created_dt = ""
                     try:
                             raw_dt = row.get('created_at')
-
                             if raw_dt:
-                                created_dt = datetime.fromisoformat(
-                                    raw_dt.replace('Z', '+00:00')
-                                ).strftime('%d-%b-%Y')
+                                created_dt = datetime.fromisoformat( raw_dt.replace('Z', '+00:00')  ).strftime('%d-%b-%Y')
                     except:
                             pass
                     opt = {
                         'value': renter_id,
                         'label': f'{head_name} ({status}) - {created_dt}',
-                        'status': status
-                    }
-                        
-                    
+                        'status': status}
+                                      
                     options_list.append(opt)
-
                     if status == 'ACTIVE':
-                        active_option = renter_id
-                        
-
+                        active_option = renter_id                       
                 state.room_heads_options = options_list
-
                 if active_option:
                     state.selected_head_option = active_option
                 elif options_list:
                     state.selected_head_option = options_list[0]['value']
                 else:
                     state.selected_head_option = None
-
             except Exception as e:
                 print("Head history error:", e)
         
@@ -282,18 +254,15 @@ def main_page():
         if state.otp_sent and state.otp_timer > 0:
             ui.notify(f'Please wait {state.otp_timer}s', type='warning')
             return
-            
         try:
             user_res = supabase.table('hub_users').select('*').eq('email', email_clean).execute()
             if not user_res.data:
                 ui.notify('Access Denied: Email registry me nahi mila!', type='negative')
-                return
-                
+                return  
             user_row = user_res.data[0]
             if user_row.get('status', 'ACTIVE') in ['BLOCKED', 'PAUSED']:
                 ui.notify(f"Aapka account admin dwara {user_row.get('status')} kiya gaya hai!", type='negative')
-                return
-                
+                return                
             supabase.auth.sign_in_with_otp({"email": email_clean})
             state.email = email_clean
             state.otp_sent = True
@@ -309,19 +278,16 @@ def main_page():
             res = supabase.auth.verify_otp({"email": state.email, "token": otp_val.strip(), "type": "email"})
             if not res.user:
                 ui.notify('Invalid OTP', type='negative')
-                return
-                
+                return           
             state.user_email = state.email
             state.is_logged_in = True
             state.otp_sent = False
             state.otp_timer = 0
-            state.current_screen = "main_hub"
-            
+            state.current_screen = "main_hub" 
             user_data = supabase.table('hub_users').select('*').eq('email', state.user_email).single().execute()
             if user_data.data:
                 state.user_role = user_data.data.get('role', 'admin') 
                 state.account_status = user_data.data.get('status', 'ACTIVE')
-                
             ui.notify(f'Logged in as {str(state.user_role).upper()}', type='positive')
             sidebar_content.refresh()
             main_container.refresh()
@@ -331,7 +297,6 @@ def main_page():
         app.storage.user['logged_in'] = True
         app.storage.user['email'] = state.email
         state.is_logged_in = True
-
 
     def logout():
         app.storage.user.clear()
@@ -350,10 +315,8 @@ def main_page():
             state.otp_timer -= 1
     ui.timer(1.0, countdown_tick)
 
-
     def share_bill_on_whatsapp(bill_exists, renter_id):
             from urllib.parse  import quote
-            
             # 1. WhatsApp Number Fetch (public_members table se)
             whatsapp_no = "" 
             try:
@@ -368,12 +331,10 @@ def main_page():
                     else:
                         whatsapp_no = raw_number.replace('+', '') 
             except Exception as e:
-                print("Error fetching number:", e)
-            
+                print("Error fetching number:", e)        
             if not whatsapp_no:
                 ui.notify("WhatsApp number nahi mila!", type='warning')
-                return
-            
+                return      
             # 2. Message Formatting
             unit_name = "kWh" if bill_exists.get('bill_type') == "Electric" else "Unit"
             msg = f"""*🧾 Meena Residency Bill - {bill_exists.get('bill_month', 'N/A')}*
@@ -390,14 +351,10 @@ def main_page():
             ➕ Extra Units: {bill_exists.get('extra_units', '0')}
             🔋 Consumed Units: {bill_exists.get('total_consumed_units', '0')}
             
-            *💰 Total Amount: ₹ {bill_exists.get('total_amount', '0')}*
-            
-            *🔗 View Image:* {bill_exists.get('bill_img_url', 'No Image') if bill_exists.get('bill_img_url') else 'N/A'}
+            *💰 Total Amount: ₹ {bill_exists.get('total_amount', '0')}*        
             """
-            
             # 3. WhatsApp URL Open
             encoded = urllib.parse.quote(msg)
-
             ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",new_tab=True)
     def share_current_rent_whatsapp(rent_row, renter_id):
             try:
@@ -425,54 +382,34 @@ def main_page():
         💰 *Total Due : ₹{rent_row.get('total_charge',0)}*
         """
                 encoded = urllib.parse.quote(msg)
-                ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",new_tab=True)
-                    
+                ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",new_tab=True)                 
             except Exception as e:
                 ui.notify(str(e))
                 print(e)
             
                 
     def share_ledger_whatsapp(rows_data, overall_balance, renter_id):
-
                 whatsapp_no = ""
-
                 try:
-                    member_res = supabase.table(
-                        'public_members'
-                    ).select(
-                        'whatsapp'
-                    ).eq(
-                        'renter_id', renter_id
-                    ).eq(
-                        'relation', 'Head'
-                    ).single().execute()
-
+                    member_res = supabase.table( 'public_members' ).select( 'whatsapp' ).eq(  'renter_id', renter_id ).eq( 'relation', 'Head' ).single().execute()
                     if member_res.data and member_res.data.get('whatsapp'):
                         raw = str(member_res.data['whatsapp']).strip()
-
                         if len(raw) == 10:
                             whatsapp_no = "91" + raw
                         else:
                             whatsapp_no = raw.replace('+', '')
-
                 except Exception as e:
                     ui.notify("WhatsApp number nahi mila")
                     return
-
                 msg = "*📊 BALANCE SHEET*\n\n"
-
                 for r in rows_data:
                     msg += (
                         f"{r.get('bill_month')} {r.get('bill_year')}\n"
                         f"Due: ₹{r.get('total_charge',0)}\n"
                         f"Paid: ₹{r.get('deposite',0)}\n"
-                        f"Balance: ₹{r.get('balance_amount',0)}\n\n"
-                    )
-
+                        f"Balance: ₹{r.get('balance_amount',0)}\n\n" )
                 msg += f"💰 Overall Balance: ₹{overall_balance}"
-
                 encoded = urllib.parse.quote(msg)
-
                 ui.navigate.to( f"https://api.whatsapp.com/send?phone={whatsapp_no}&text={encoded}",  new_tab=True)
                 
     def send_push(renter_id, title, body):
@@ -498,13 +435,44 @@ def main_page():
                         "body": body } },timeout=5)
         except Exception as e:
             print("FCM Error:", e)
+
+    def universal_refresh():
+            fetch_realtime_rooms()
+            # Selected room reload
+            if state.selected_room:
+                # Agar room delete/invalid ho gaya ho
+                if str(state.selected_room) not in [
+                    str(x) for x in state.available_rooms
+                ]:
+                    state.selected_room = None
+                    state.selected_head_option = None
+                    state.renter_id = None
+                    state.active_renter_head_id = None
+                else:
+                    fetch_room_heads_history(state.selected_room)
+            # Selected head reload
+            if state.selected_head_option:
+                try:
+                    r = (
+                        supabase.table('renters')
+                        .select('*')
+                        .eq('id', state.selected_head_option)
+                        .single()
+                        .execute() )
+                    if r.data:
+                        state.renter_id = r.data['id']
+                        state.room_no = r.data['room_no']
+                        state.active_renter_head_id = r.data.get( 'head_member_id' )
+                except:
+                    pass
+            main_container.refresh()
     # --- ☰ NATIVE SIDEBAR DRAWER ---
     with ui.left_drawer(value=False, fixed=True).classes('custom-drawer').props('side="left" width=260 behavior="mobile"') as sidebar:
         @ui.refreshable
         def sidebar_content():
             with ui.column().classes('w-full p-4 gap-4'):
                 if not state.is_logged_in:
-                    ui.label('Morya Hub Login').classes('text-xl font-black text-green-900 mt-2')
+                    ui.label('Meena Hub Login').classes('text-xl font-black text-green-900 mt-2')
                     with ui.card().classes('w-full p-3 bg-slate-50 border shadow-none rounded-xl'):
                         with ui.column().bind_visibility_from(state, 'otp_sent', backward=lambda x: not x).classes('w-full'):
                             e_input = ui.input(label='Registered Email').classes('w-full').props('dense autofocus')
@@ -541,8 +509,10 @@ def main_page():
         with ui.row().classes('nav-header-bar'):
             with ui.row().classes('items-center gap-2'):
                 ui.button(icon='menu', on_click=sidebar.toggle).props('flat round text-color=white dense').classes('text-white')
-                ui.button(icon='refresh', on_click=lambda: main_container.refresh()).props('flat round text-color=white dense')        
-                ui.label('Morya Hub Control').classes('text-white text-base font-black tracking-wide')
+               
+                ui.button(icon='refresh',  on_click=universal_refresh).props('flat round text-color=white dense')        
+              
+                ui.label('Meena Hub Control').classes('text-white text-base font-black tracking-wide')
             
             ui.button('🏠 Home', on_click=lambda: (setattr(state, 'current_screen', 'main_hub'), main_container.refresh())) \
                 .bind_visibility_from(state, 'current_screen', backward=lambda x: x == 'main_hub') \
@@ -596,8 +566,63 @@ def main_page():
                     with ui.column().classes('w-full gap-3'):
                         ui.button('🏢 Rental Detail', on_click=lambda: (fetch_realtime_rooms(), setattr(state, 'current_screen', 'meena_room_select'), setattr(state, 'selected_meena_tab', 'rental_detail'), setattr(state, 'selected_room', None), setattr(state, 'room_sub_tab', None), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
                         ui.button('📢 Publish Notice', on_click=lambda: (fetch_realtime_rooms(), setattr(state, 'current_screen', 'meena_room_select'), setattr(state, 'selected_meena_tab', 'publish_notice'), setattr(state, 'selected_room', None), setattr(state, 'room_sub_tab', None), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
-                        ui.button('📷 Meter Scanner', on_click=lambda: ( setattr(state, 'current_screen', 'meter_scanner'), main_container.refresh() )).props('unelevated color=green-700').classes('meena-main-btn')
-                # 📥 SCREEN 3: SELECT ROOM DROPBOX ONLY SCREEN
+                        ui.button(' Reading  Rate', on_click=lambda:( setattr(state, 'current_screen', 'meter_scanner'), main_container.refresh())).props('unelevated color=green-700').classes('meena-main-btn')
+              
+                
+                elif state.current_screen == "meter_scanner":
+                                with ui.row().classes('w-full justify-between items-center mb-2'):
+                                    ui.button( '⬅ Back',  on_click=lambda: (setattr(state, 'current_screen', 'meena_tabs'), main_container.refresh() )).props('flat dense').classes( 'text-green-800 font-bold text-xs')
+                                    ui.label( 'Meter Scanner Settings' ).classes( 'text-xs font-bold text-green-700' )
+                                # -----------------------------
+                                rate_data = { "electric_rate": 0,"gas_rate": 0}
+                                try:
+                                    res = (
+                                        supabase.table("hub_users")
+                                        .select("default_rate")
+                                        .eq("id", 3)
+                                        .single()
+                                        .execute())
+                                    if res.data and res.data.get("default_rate"):
+                                        rate_data = res.data["default_rate"]
+                                except Exception as e:
+                                    print("Rate Load Error:", e)
+                                edit_mode = { "value": not ( rate_data.get("electric_rate") or rate_data.get("gas_rate") )}
+                                @ui.refreshable
+                                def rate_ui():
+                                    if edit_mode["value"]:
+                                        with ui.card().classes( 'w-full p-4 bg-white border rounded-xl' ):
+                                            ui.label(  'Default Utility Rates' ).classes( 'text-lg font-bold text-green-800')
+                                            ui.label( 'These rates will be used across Electric and Gas Billing.').classes(  'text-xs text-gray-500 mb-2')
+                                            electric_input = ui.input( label='⚡ Electric Rate (₹/Unit)', value=rate_data.get(  "electric_rate",  0 )).props( 'outlined type=number').classes(  'w-full')
+                                            gas_input = ui.input( label='🔥 Gas Rate (₹/Unit)', value=rate_data.get( "gas_rate",  0)).props( 'outlined type=number' ).classes( 'w-full')
+                                            def save_default_rates():
+                                                try:
+                                                    payload = { "electric_rate":  float(  electric_input.value or 0 ),
+                                                        "gas_rate": float( gas_input.value or 0)
+                                                        }
+                                                    
+                                                    supabase.table("hub_users") .update({  "default_rate": payload  }) .eq("id", 3) .execute() 
+                                                    rate_data.update(payload)
+                                                    edit_mode["value"] = False
+                                                    ui.notify(  'Rates Saved Successfully', type='positive')
+                                                    rate_ui.refresh()
+                                                except Exception as e:
+                                                    ui.notify( f"Save Error : {e}", type='negative')
+                                                    print(e)
+                                            ui.button('💾 Save Rates',  on_click=save_default_rates ).classes( 'w-full bg-green-700 text-white' )
+                                    else:
+
+                                            with ui.card().classes(
+                                                'w-full p-4 border-l-4 border-green-600 bg-green-50' ):
+                                                ui.label(  'Default Rates').classes( 'text-lg font-bold text-green-800')
+                                                ui.label( f"⚡ Electric Rate : ₹{rate_data.get('electric_rate',0)}" ).classes( 'font-bold text-blue-700')
+                                                ui.label( f"🔥 Gas Rate : ₹{rate_data.get('gas_rate',0)}" ).classes('font-bold text-orange-700' )
+                                            def enable_edit():
+                                                edit_mode["value"] = True
+                                                rate_ui.refresh()
+                                            ui.button( '✏ Edit Rates',  on_click=enable_edit  ).classes('w-full bg-orange-600 text-white')
+                                rate_ui()
+              
                 elif state.current_screen == "meena_room_select":
                     with ui.row().classes('w-full justify-between items-center mb-2'):
                         ui.button('⬅ Back to Tabs', on_click=lambda: (setattr(state, 'current_screen', 'meena_tabs'), main_container.refresh())).props('flat dense').classes('text-green-800 font-bold text-xs')
@@ -622,8 +647,24 @@ def main_page():
                         setattr(state, 'current_screen', 'meena_original_webpage')
                         main_container.refresh()
 
+                    pending_rooms = set()
+                    try:
+                        p = (
+                            supabase.table("utility_billing_ledger")
+                            .select("room_no")
+                            .eq("status", "Submitted")
+                            .execute() )
+                        pending_rooms = {
+                            str(x["room_no"]).strip()
+                            for x in (p.data or [])
+                            if x.get("room_no")}
+                    except:
+                        pass
+                  
                     def room_box(room):
-                        head_name = "Vacant"
+                        pending_bill = str(room).strip() in pending_rooms
+                        
+                        head_name = "Vacant"               
                         try:
                             renter = (
                                 supabase.table('renters')
@@ -645,24 +686,25 @@ def main_page():
                                         head_name = head.data.get('name', 'Vacant')
                         except:
                             pass
-                        with ui.card().classes('w-full p-3 cursor-pointer bg-white border rounded-xl' ).on('click', lambda r=room: open_room(r)): 
-                            with ui.row().classes( 'w-full items-center justify-between' ):
-                                ui.label(f'🏠 Room {room}').classes( 'font-bold text-green-800' )
+                        with ui.card().classes('w-full p-2 cursor-pointer bg-white border rounded-xl' ).on('click', lambda r=room: open_room(r)): 
+                            with ui.row().classes( 'items-center gap-1'):
+                                ui.label(f'🏠 Room {room}').classes('font-bold text-green-800')
+                                if pending_bill:
+                                    ui.html('<div class="blink-dot"></div>')
                                 ui.label(head_name).classes('text-xs text-gray-600 font-medium')
                     if state.selected_meena_tab == "publish_notice":
                         notice_text = ""
-
                         try:
                             res = (
                                 supabase.table("hub_users")
                                 .select("notice")
-                                .eq("email", state.user_email)
+                                .eq("id", 1)
                                 .single()
-                                .execute())
+                                .execute() )
                             if res.data:
-                                notice_text = res.data.get("notice") or ""
-                        except:
-                            pass
+                                notice_text = str(res.data.get("notice") or "")
+                        except Exception as e:
+                            print("Notice Load Error:", e)                 
                         edit_mode = {"value": False if notice_text else True}
                         @ui.refreshable
                         def notice_ui():
@@ -671,11 +713,17 @@ def main_page():
                                 notice_box.value = notice_text
                                 def save_notice():
                                     nonlocal notice_text
-                                    supabase.table("hub_users").update({ "notice": notice_box.value }).eq("email",  state.user_email).execute()
-                                    notice_text = notice_box.value
-                                    ui.notify("Notice Saved")
-                                    edit_mode["value"] = False
-                                    notice_ui.refresh()
+                                    try:
+                                        supabase.table("hub_users").update({
+                                            "notice": notice_box.value
+                                        }).eq("id", 1).execute()
+                                        notice_text = notice_box.value
+                                        ui.notify("Notice Saved")
+                                        edit_mode["value"] = False
+                                        notice_ui.refresh()
+                                    except Exception as e:
+                                        ui.notify(f"Save Error: {e}", type="negative")
+                                        print("Notice Save Error:", e)
                                 ui.button( "Save Notice",  on_click=save_notice ).classes("w-full bg-green-700 text-white"  )
                             else:
                                 with ui.card().classes(
@@ -689,384 +737,31 @@ def main_page():
                         notice_ui()   
                         return
                     # Ground Floor
-                    with ui.card().classes('w-full p-3 bg-green-50'):
-                        ui.label('Ground Floor').classes(
-                            'text-[11px] text-gray-500 font-bold'
-                        )
-
-                        with ui.column().classes('w-full gap-2 mt-2'):
+                    with ui.card().classes('w-full p-2 bg-green-50'):
+                        ui.label('Ground Floor').classes('text-[11px] text-gray-500 font-bold')
+                        with ui.column().classes('w-full gap-2 mt-0'):
                             room_box('1')
                             room_box('2')
                             room_box('3')
-
                     # 1st Floor
-                    with ui.card().classes('w-full p-3 bg-green-50 mt-2'):
-                        ui.label('1st Floor').classes(
-                            'text-[11px] text-gray-500 font-bold'
-                        )
-
-                        with ui.column().classes('w-full gap-2 mt-2'):
+                    with ui.card().classes('w-full p-2 bg-green-50 mt-0'):
+                        ui.label('1st Floor').classes('text-[11px] text-gray-500 font-bold' )
+                        with ui.column().classes('w-full gap-2 mt-0'):
                             room_box('4')
-
                     # 2nd Floor
-                    with ui.card().classes('w-full p-3 bg-green-50 mt-2'):
-                        ui.label('2nd Floor').classes(
-                            'text-[11px] text-gray-500 font-bold'
-                        )
-
-                        with ui.column().classes('w-full gap-2 mt-2'):
+                    with ui.card().classes('w-full p-2  bg-green-50 mt-0'):
+                        ui.label('2nd Floor').classes('text-[11px] text-gray-500 font-bold' )
+                        with ui.column().classes('w-full gap-2 mt-0'):
                             room_box('5')
                             room_box('6')
-
                     # 3rd Floor
-                    with ui.card().classes('w-full p-3 bg-green-50 mt-2'):
-                        ui.label('3rd Floor').classes(
-                            'text-[11px] text-gray-500 font-bold'
-                        )
-
-                        with ui.column().classes('w-full gap-2 mt-2'):
+                    with ui.card().classes('w-full p-2 bg-green-50 mt-0'):
+                        ui.label('3rd Floor').classes( 'text-[11px] text-gray-500 font-bold' )
+                        with ui.column().classes('w-full gap-2 mt-0'):
                             room_box('7')
                         
-
-                elif state.current_screen == "meter_scanner":
-
-                    from urllib.parse import unquote
-                    import uuid
-
-                    ui.button(
-                        '⬅ Back',
-                        on_click=lambda: (
-                            setattr(state, 'current_screen', 'meena_tabs'),
-                            main_container.refresh()
-                        )
-                    ).classes('w-full mb-3')
-
-                    ui.label(
-                        '📷 Meter Scanner'
-                    ).classes(
-                        'text-xl font-bold text-green-800'
-                    )
-
-                    def process_meter_qr(qr):
-
-                        try:
-
-                            qr = unquote(str(qr).strip())
-
-                            parts = qr.split('|')
-
-                            room_no = parts[0].replace(
-                                'ROOM=',
-                                ''
-                            ).strip()
-
-                            bill_type = parts[1].replace(
-                                'TYPE=',
-                                ''
-                            ).strip()
-
-                            renter = (
-                                supabase.table('renters')
-                                .select('*')
-                                .eq('room_no', room_no)
-                                .eq('status', 'ACTIVE')
-                                .single()
-                                .execute()
-                            )
-
-                            if not renter.data:
-                                ui.notify(
-                                    'No active renter found',
-                                    type='negative'
-                                )
-                                return
-
-                            state.scanned_room = room_no
-                            state.scanned_bill_type = bill_type
-                            state.scanned_renter_id = renter.data['id']
-
-                            head_id = renter.data.get(
-                                'head_member_id'
-                            )
-
-                            state.active_renter_head_id = head_id
-
-                            state.scanned_renter_name = ''
-
-                            if head_id:
-
-                                member = (
-                                    supabase.table('public_members')
-                                    .select('name')
-                                    .eq('id', head_id)
-                                    .single()
-                                    .execute()
-                                )
-
-                                if member.data:
-                                    state.scanned_renter_name = (
-                                        member.data['name']
-                                    )
-
-                        except Exception as ex:
-
-                            ui.notify(
-                                str(ex),
-                                type='negative'
-                            )
-
-                    # URL PARAMETER AUTO READ
-                    try:
-
-                        meter_qr = ui.context.client.request.query_params.get(
-                            'meter_qr',
-                            ''
-                        )
-
-                        if meter_qr and not state.scanned_room:
-                            process_meter_qr(meter_qr)
-
-                    except:
-                        pass
-
-                    if not state.scanned_room:
-
-                        with ui.card().classes(
-                            'w-full p-4 bg-orange-50'
-                        ):
-                            ui.label(
-                                'QR Scan ka wait ho raha hai...'
-                            ).classes(
-                                'font-bold text-orange-700'
-                            )
-
-                            ui.label(
-                                'Kodular se URL open karein'
-                            ).classes(
-                                'text-xs text-gray-600'
-                            )
-
-                    if state.scanned_room:
-
-                        ui.separator()
-
-                        ui.input(
-                            'Room No',
-                            value=state.scanned_room
-                        ).props('readonly')
-
-                        ui.input(
-                            'Renter ID',
-                            value=str(state.scanned_renter_id)
-                        ).props('readonly')
-
-                        ui.input(
-                            'Head Name',
-                            value=state.scanned_renter_name
-                        ).props('readonly')
-
-                        ui.input(
-                            'Bill Type',
-                            value=state.scanned_bill_type
-                        ).props('readonly')
-
-                        ui.input(
-                            'Month',
-                            value=state.selected_month
-                        ).props('readonly')
-
-                        ui.input(
-                            'Year',
-                            value=str(datetime.now().year)
-                        ).props('readonly')
-
-                        reading_input = ui.input(
-                            'Current Reading'
-                        ).props(
-                            'outlined type=number'
-                        ).classes('w-full')
-
-                        async def upload_meter(e):
-
-                            try:
-
-                                file_bytes = e.content.read()
-
-                                file_name = (
-                                    f"meter_{uuid.uuid4()}.jpg"
-                                )
-
-                                supabase.storage.from_(
-                                    "utility-bills"
-                                ).upload(
-                                    path=file_name,
-                                    file=file_bytes,
-                                    file_options={
-                                        "content-type":
-                                        "image/jpeg"
-                                    }
-                                )
-
-                                public_url = (
-                                    supabase.storage
-                                    .from_("utility-bills")
-                                    .get_public_url(file_name)
-                                )
-
-                                state.scanned_image_url = public_url
-
-                                ui.notify(
-                                    'Photo Uploaded'
-                                )
-
-                            except Exception as ex:
-
-                                ui.notify(
-                                    str(ex),
-                                    type='negative'
-                                )
-
-                        ui.upload(
-                            label='Meter Photo',
-                            auto_upload=True,
-                            on_upload=upload_meter
-                        ).props(
-                            'accept=image/*'
-                        ).classes('w-full')
-
-                        def submit_meter():
-                            if not state.scanned_image_url:
-                                ui.notify('Meter photo required')
-                                return
-
-                            if not reading_input.value:
-                                ui.notify('Enter current reading')
-                                return
-
-
-                            try:
-
-                                prev_reading = 0
-
-                                try:
-
-                                    prev = (
-                                        supabase.table(
-                                            'utility_billing_ledger'
-                                        )
-                                        .select('*')
-                                        .eq(
-                                            'renter_id',
-                                            state.scanned_renter_id
-                                        )
-                                        .eq(
-                                            'bill_type',
-                                            state.scanned_bill_type
-                                        )
-                                        .order(
-                                            'id',
-                                            desc=True
-                                        )
-                                        .limit(1)
-                                        .execute()
-                                    )
-
-                                    if prev.data:
-
-                                        prev_reading = float(
-                                            prev.data[0].get(
-                                                'curr_reading',
-                                                0
-                                            )
-                                        )
-
-                                except:
-                                    pass
-
-                                payload = {
-
-                                    "renter_id":
-                                    state.scanned_renter_id,
-
-                                    "room_no":
-                                    state.scanned_room,
-
-                                    "head_id":
-                                    state.active_renter_head_id,
-
-                                    "bill_type":
-                                    state.scanned_bill_type,
-
-                                    "bill_month":
-                                    state.selected_month,
-
-                                    "bill_year":
-                                    datetime.now().year,
-
-                                    "prev_reading":
-                                    prev_reading,
-
-                                    "prev_reading_date":
-                                    datetime.now().strftime(
-                                        "%Y-%m-%d"
-                                    ),
-
-                                    "curr_reading":
-                                    float(
-                                        reading_input.value
-                                    ),
-
-                                    "curr_reading_date":
-                                    datetime.now().strftime(
-                                        "%Y-%m-%d"
-                                    ),
-
-                                    "status":
-                                    "Pending",
-
-                                    "rate_per_unit":
-                                    7.50,
-
-                                    "bill_img_url":
-                                    state.scanned_image_url
-
-                                }
-
-                                supabase.table(
-                                    'utility_billing_ledger'
-                                ).insert(
-                                    payload
-                                ).execute()
-
-                                ui.notify(
-                                    'Meter Saved Successfully',
-                                    type='positive'
-                                )
-
-                                state.scanned_room = ""
-                                state.scanned_bill_type = ""
-                                state.scanned_renter_id = ""
-                                state.scanned_renter_name = ""
-                                state.scanned_image_url = ""
-
-                                main_container.refresh()
-
-                            except Exception as ex:
-
-                                ui.notify(
-                                    str(ex),
-                                    type='negative'
-                                )
-                        
-                        ui.button(
-                            '✅ Submit Meter',
-                            on_click=submit_meter
-                        ).classes(
-                            'w-full bg-orange-600 text-white'
-                        )
-
-                    
-                        
+                
+                  
                     
                             
                 # 🚪 SCREEN 4: HOBAHOO MEENA ORIGINAL WEBPAGE ENGINE CODES
@@ -1121,7 +816,7 @@ def main_page():
                             options={opt['value']: opt['label'] for opt in state.room_heads_options},
                             value=state.selected_head_option,
                             on_change=on_head_dropdown_change
-                        ).props('outlined dense options-dense borderless').classes('bg-white text-xs rounded-lg max-w-[150px]')
+                        ).props('outlined dense options-dense borderless').classes('bg-white text-xs rounded-lg w-[250px]')
 
                         # --- NEW LOGIC: ADD NEW HEAD BUTTON ---
                         # Sirf tab dikhega agar koi ACTIVE renter nahi hai
@@ -1179,8 +874,29 @@ def main_page():
                             
                         except:
                             pass
-                        pending_payment = False
 
+                        electric_pending = False
+                        gas_pending = False
+                        try:
+                            electric_pending = bool(
+                                supabase.table("utility_billing_ledger")
+                                .select("id")
+                                .eq("renter_id", state.renter_id)
+                                .eq("bill_type", "Electric")
+                                .eq("status", "Submitted")
+                                .limit(1)
+                                .execute().data )
+                            gas_pending = bool(
+                                supabase.table("utility_billing_ledger")
+                                .select("id")
+                                .eq("renter_id", state.renter_id)
+                                .eq("bill_type", "Gas")
+                                .eq("status", "Submitted")
+                                .limit(1)
+                                .execute().data)
+                        except:
+                            pass    
+                        pending_payment = False
                         try:
                             pending_check = (
                                 supabase.table('rent_ledger')
@@ -1198,11 +914,15 @@ def main_page():
                             with ui.element('div').classes('tile-card-btn').on('click', lambda: (setattr(state, 'room_sub_tab', 'member'), setattr(state, 'member_view', 'list'), main_container.refresh())):
                                 ui.icon('person', size='2.2rem').classes('text-green-700')
                                 ui.label('Member Detail').classes('font-bold text-center mt-1 text-xs text-gray-700')
-                            with ui.element('div').classes('tile-card-btn').on('click', lambda: (setattr(state, 'room_sub_tab', 'electric'), setattr(state, 'billing_tab', 'current'), main_container.refresh())):
-                                ui.icon('bolt', size='2.2rem').classes('text-green-700')
-                                ui.label('Electric Bill').classes('font-bold text-center mt-1 text-xs text-gray-700')
+                            with ui.element('div').classes('tile-card-btn').on( 'click', lambda: ( setattr(state, 'room_sub_tab', 'electric'),setattr(state, 'billing_tab', 'current'), main_container.refresh() )):
+                                with ui.row().classes('items-center gap-1'):
+                                    ui.icon('bolt', size='2.2rem').classes('text-green-700')
+                                    if electric_pending: ui.html('<div class="blink-dot"></div>')
+                                ui.label('Electric Bill').classes( 'font-bold text-center mt-1 text-xs text-gray-700')
                             with ui.element('div').classes('tile-card-btn').on('click', lambda: (setattr(state, 'room_sub_tab', 'gas'), setattr(state, 'billing_tab', 'current'), main_container.refresh())):
-                                ui.icon('local_fire_department', size='2.2rem').classes('text-green-700')
+                                with ui.row().classes('items-center gap-1'):
+                                    ui.icon( 'local_fire_department', size='2.2rem').classes('text-green-700')
+                                    if gas_pending: ui.html('<div class="blink-dot"></div>')
                                 ui.label('Gas Bill').classes('font-bold text-center mt-1 text-xs text-gray-700')
                             with ui.element('div').classes('tile-card-btn').on('click', lambda: (setattr(state, 'room_sub_tab', 'rent'), setattr(state, 'rent_tab', 'current'), main_container.refresh())):
                                     with ui.row().classes('items-center gap-1'):
@@ -1268,6 +988,21 @@ def main_page():
                                                     with ui.row().classes('gap-1'):
                                                         ui.label("Mobile No:").classes('font-bold text-gray-900')
                                                         ui.label(f"{member.get('mobile', 'N/A')}").classes('text-gray-600')
+                                                    if str(member.get('relation', '')).lower() == 'head':
+                                                            try:
+                                                                renter_info = (
+                                                                    supabase.table('renters')
+                                                                    .select('email')
+                                                                    .eq('id', state.renter_id)
+                                                                    .single()
+                                                                    .execute() )
+                                                                email_val = renter_info.data.get('email')
+                                                                if email_val:
+                                                                    with ui.row().classes('gap-1'):
+                                                                        ui.label("Email:").classes('font-bold text-gray-900')
+                                                                        ui.label(email_val).classes('text-gray-600')
+                                                            except:
+                                                                pass
                                                     with ui.row().classes('gap-1'):
                                                         ui.label("Age:").classes('font-bold text-gray-900')
                                                         ui.label(f"{member.get('age', 'N/A')}").classes('text-gray-600')
@@ -1279,7 +1014,7 @@ def main_page():
                                                         ui.label(f"{member.get('religion', 'N/A')}").classes('text-gray-600')
                                                     with ui.row().classes('gap-1'):
                                                         ui.label("Aadhaar No:").classes('font-bold text-gray-900')
-                                                        ui.label("[Aadhaar Redacted]").classes('text-gray-600')
+                                                        ui.label(f"{member.get('aadhaar', 'N/A')}").classes('text-gray-600')
                                                     if member.get('whatsapp'):
                                                         with ui.row().classes('gap-1'):
                                                             ui.label("WhatsApp:").classes('font-bold text-gray-900')
@@ -1292,11 +1027,11 @@ def main_page():
                                                 with ui.column().classes('w-full p-3 bg-gray-50 border-t text-[14px] font-normal gap-1'):
                                                     ui.label('Address Details:').classes('font-bold text-gray-900 text-sm border-b pb-1 mb-1')
                                                     
-                                                    raw_address = member.get('address', 'Meena Residency')
+                                                    raw_address = member.get('address', 'Same as Head')
                                                     if raw_address == "Same as Head":
                                                         with ui.row().classes('items-center no-wrap gap-1'):
                                                             ui.label("Current Address:").classes('font-bold text-gray-900')
-                                                            ui.label("Same as Family Head Address").classes('text-emerald-700 font-medium')
+                                                            ui.label("Same as  Head ").classes('text-emerald-700 font-medium')
                                                     elif "Panchayat:" in raw_address or "Dist:" in raw_address:
                                                         addr_dict = {}
                                                         parts = raw_address.split(',')
@@ -1370,7 +1105,20 @@ def main_page():
                                                                             elif k == 'Pin': pin_val = v
                                                                 else:
                                                                     v_val = raw_addr
-
+                                                                email_val = ''
+                                                                if str(m_data.get('relation', '')).lower() == 'head':
+                                                                    try:
+                                                                        renter_info = (
+                                                                            supabase.table('renters')
+                                                                            .select('email')
+                                                                            .eq('id', state.renter_id)
+                                                                            .single()
+                                                                            .execute()
+                                                                        )
+                                                                        if renter_info.data:
+                                                                            email_val = renter_info.data.get('email', '')
+                                                                    except:
+                                                                        pass
                                                                 state.dynamic_family_members = [{
                                                                     'edit_id': m_data.get('id'),
                                                                     'name_v': m_data.get('name', ''),
@@ -1378,6 +1126,7 @@ def main_page():
                                                                     'gen_v': m_data.get('gender', 'Male'),
                                                                     'age_v': str(m_data.get('age', '')),
                                                                     'mob_v': m_data.get('mobile', ''),
+                                                                    'email_v': email_val,
                                                                     'adh_v': m_data.get('aadhaar', ''),
                                                                     'relig_v': m_data.get('religion', ''),
                                                                     'v_v': v_val, 'panch_v': pan_val, 'block_v': blk_val,
@@ -1425,13 +1174,13 @@ def main_page():
                                             if not state.dynamic_family_members:
                                                 if not state.active_renter_head_id:
                                                     state.dynamic_family_members.append({
-                                                        'name_v': '', 'rel_v': 'Head', 'gen_v': 'Male', 'age_v': '', 'mob_v': '', 'adh_v': '',
+                                                        'name_v': '', 'rel_v': 'Head', 'gen_v': 'Male', 'age_v': '', 'mob_v': '', 'whatsapp_v': '','email_v': '','adh_v': '',
                                                         'show_so': False, 'show_staff_so': False, 'show_addr': True,
                                                         'v_v': '', 'panch_v': '', 'block_v': '', 'ps_v': '', 'po_v': '', 'dt_v': '', 'st_v': '', 'pin_v': ''
                                                     })
                                                 else:
                                                     state.dynamic_family_members.append({
-                                                        'name_v': '', 'rel_v': 'Wife', 'gen_v': 'Female', 'age_v': '', 'mob_v': '', 'adh_v': '',
+                                                        'name_v': '', 'rel_v': 'Wife', 'gen_v': 'Female', 'age_v': '', 'mob_v': '','whatsapp_v': '',  'email_v': '', 'adh_v': '',
                                                         'show_so': False, 'show_staff_so': False, 'show_addr': False,
                                                         'v_v': '', 'panch_v': '', 'block_v': '', 'ps_v': '', 'po_v': '', 'dt_v': '', 'st_v': '', 'pin_v': ''
                                                     })
@@ -1456,23 +1205,30 @@ def main_page():
                                                     
                                                     with ui.grid(columns=2).classes('w-full gap-2 mt-2'):
                                                         ui.select(['Female', 'Male', 'Other'], label='Gender', value=m_state['gen_v']).props('outlined dense').on('value_change', lambda e, s=m_state: s.update({'gen_v': e.value}))
-                                                        ui.input('Age').props('outlined dense type="number"').bind_value(m_state, 'age_v')
-                                                        ui.input('Mobile').props('outlined dense mask="##########"').bind_value(m_state, 'mob_v')
-                                                        ui.input('Aadhaar').props('outlined dense mask="####-####-####"').bind_value(m_state, 'adh_v')
+                                                        ui.input('Age').props('outlined dense  type=tel inputmode=numeric').bind_value(m_state, 'age_v')
+                                                        ui.input('Mobile').props('outlined dense   type=tel inputmode=numeric mask="##########"').bind_value(m_state, 'mob_v')
+                                                        # --- WhatsApp Input (Sirf Head ya Staff/Others ke liye) ---
+                                                        ui.input('WhatsApp No').props('outlined dense  type=tel inputmode=numeric mask="##########"').bind_value(m_state, 'whatsapp_v')
+                                                        if m_state.get('rel_v') == 'Head':
+                                                            ui.input('Email ID').props('outlined dense type="email"').bind_value(m_state, 'email_v')
+                                                        ui.input('Aadhaar').props('outlined dense  type=tel inputmode=numeric mask="####-####-####"').bind_value(m_state, 'adh_v')
                                                     
                                                     if m_state.get('show_addr') or m_state.get('rel_v') == 'Head':
                                                         with ui.column().classes('w-full mt-2 p-2 bg-white rounded border border-emerald-100'):
-                                                            ui.input('Religion').props('outlined dense placeholder="e.g., Hindu"').classes('w-full mb-2').bind_value(m_state, 'relig_v')
+                                                            ui.select(  ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Other'],  label='Religion', value=m_state.get('relig_v', 'Hindu')).props('outlined dense').bind_value(m_state, 'relig_v')
                                                             ui.label('Address Details').classes('text-[10px] font-bold text-emerald-600')
                                                             with ui.grid(columns=2).classes('w-full gap-2'):
+                                                                INDIA_STATES = [  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar',  'Chhattisgarh','Goa','Gujarat','Haryana',  'Himachal Pradesh','Jharkhand','Karnataka','Kerala', 'Madhya Pradesh','Maharashtra','Manipur','Meghalaya', 'Mizoram','Nagaland','Odisha','Punjab',   'Rajasthan','Sikkim','Tamil Nadu','Telangana', 'Tripura','Uttar Pradesh','Uttarakhand',   'West Bengal','Delhi']
+                                                                ui.select( INDIA_STATES,  label='State', value=m_state.get('st_v') or 'Bihar').props('outlined dense').bind_value(m_state, 'st_v')
+                                                                ui.input('District').props('outlined dense')
+                                                                    
+                                                                ui.input('Block').props('outlined dense').bind_value(m_state, 'block_v')
+
                                                                 ui.input('Village / Flat No').props('outlined dense').bind_value(m_state, 'v_v')
                                                                 ui.input('Panchayat').props('outlined dense').bind_value(m_state, 'panch_v')
-                                                                ui.input('Block').props('outlined dense').bind_value(m_state, 'block_v')
                                                                 ui.input('Police Station (PS)').props('outlined dense').bind_value(m_state, 'ps_v')
                                                                 ui.input('Post Office (PO)').props('outlined dense').bind_value(m_state, 'po_v')
-                                                                ui.input('District').props('outlined dense').bind_value(m_state, 'dt_v')
-                                                                ui.input('State').props('outlined dense').bind_value(m_state, 'st_v')
-                                                                ui.input('Pincode').props('outlined dense').bind_value(m_state, 'pin_v')
+                                                                ui.input('Pincode').props('outlined dense  type=tel inputmode=numeric ').bind_value(m_state, 'pin_v')
                                         
                                         sub_members_ui()
 
@@ -1480,7 +1236,7 @@ def main_page():
                                             def add_fam():
                                                 if len(state.dynamic_family_members) < 5:
                                                     state.dynamic_family_members.append({
-                                                        'name_v': '', 'rel_v': 'Wife', 'gen_v': 'Female', 'age_v': '', 'mob_v': '', 'adh_v': '', 'show_so': False, 'show_staff_so': False, 'show_addr': False,
+                                                        'name_v': '', 'rel_v': 'Wife', 'gen_v': 'Female', 'age_v': '', 'mob_v': '', 'adh_v': '','whatsapp_v': '','email_v': '', 'show_so': False, 'show_staff_so': False, 'show_addr': False,
                                                         'v_v': '', 'panch_v': '', 'block_v': '', 'ps_v': '', 'po_v': '', 'dt_v': '', 'st_v': '', 'pin_v': ''
                                                     })
                                                     sub_members_ui.refresh()
@@ -1512,7 +1268,7 @@ def main_page():
                                                         "name": member_name, "relation": r_val, "father_husband_name": None,
                                                         "age": int(m['age_v']) if m.get('age_v') and str(m['age_v']).isdigit() else None,
                                                         "gender": m.get('gen_v', 'Female'), "mobile": m.get('mob_v') if m.get('mob_v') else None, 
-                                                        "whatsapp": None, "aadhaar": m.get('adh_v') if m.get('adh_v') else None,
+                                                        "whatsapp": m.get('whatsapp_v') if m.get('whatsapp_v') else None, "aadhaar": m.get('adh_v') if m.get('adh_v') else None,
                                                         "religion": str(m.get('relig_v', '')).strip() or 'N/A', "occupation": None, "address": sub_addr,
                                                         "head_id": head_id_value, "renter_id": state.renter_id
                                                     }
@@ -1521,14 +1277,21 @@ def main_page():
                                                         supabase.table('public_members').update(row_data).eq('id', m['edit_id']).execute()
                                                         send_push( state.renter_id, "New Member Added",f"Room {state.selected_room} New member added")
                                                         if r_val == 'Head':
-                                                            supabase.table('renters').update({'head_member_id': m['edit_id']}).eq('id', state.renter_id).execute()
+                                                            renter_payload = {'head_member_id': m['edit_id']}
+                                                            if m.get('email_v'):
+                                                                renter_payload['email'] = str(m['email_v']).strip().lower()
+                                                            supabase.table('renters').update(  renter_payload).eq(   'id',  state.renter_id).execute()
                                                             state.active_renter_head_id = m['edit_id']
                                                     else: 
                                                         row_data["status"] = "Pending" 
                                                         insert_response = supabase.table('public_members').insert([row_data]).execute()
                                                         if r_val == 'Head' or not state.active_renter_head_id:
                                                             head_uuid = insert_response.data[0]['id']
-                                                            supabase.table('renters').update({'head_member_id': head_uuid}).eq('id', state.renter_id).execute()
+                                                            renter_payload = {'head_member_id': head_uuid}
+                                                            if m.get('email_v'):
+                                                                renter_payload['email'] = str(m['email_v']).strip().lower()
+
+                                                            supabase.table('renters').update(  renter_payload).eq(  'id',  state.renter_id).execute()
                                                             state.active_renter_head_id = head_uuid
                                                 
                                                 ui.notify('Record Processed successfully!', type='positive')
@@ -1953,7 +1716,7 @@ def main_page():
                                 
                                 # Tab Navigation
                                 # --- TAB NAVIGATION SECTION (FIXED FOR 3 TABS) ---
-                                with ui.row().classes('w-full p-1 bg-gray-100 rounded-lg shadow-inner mb-4 border'):
+                                with ui.row().classes('w-full p-1 bg-gray-100 rounded-lg shadow-inner mb-3 border'):
                                     # Current Tab Button
                                     ui.button('📅 CURRENT', on_click=lambda: (setattr(state, 'billing_tab', 'current'), main_container.refresh())) \
                                         .classes('flex-1 font-bold text-[10px] h-9').props(f'flat' if state.billing_tab != 'current' else 'unelevated color="green-700" text-color=white')
@@ -1962,7 +1725,7 @@ def main_page():
                                         .classes('flex-1 font-bold text-[10px] h-9').props(f'flat' if state.billing_tab != 'history' else 'unelevated color="green-700" text-color=white')
                                     # Requested Tab Button
                                     ui.button('🔔 REQUESTED', on_click=lambda: (setattr(state, 'billing_tab', 'requested'), main_container.refresh())) \
-                                        .classes('flex-1 font-bold text-[10px] h-9').props(f'flat' if state.billing_tab != 'requested' else 'unelevated color="amber-800" text-color=white')
+                                        .classes('flex-1 font-bold text-[9px] h-9').props(f'flat' if state.billing_tab != 'requested' else 'unelevated color="amber-700" text-color=white')
                                 if state.billing_tab == "current":
                                     c_prev_read, c_prev_date = "0", None
                                     bill_exists = None
@@ -1986,30 +1749,55 @@ def main_page():
                                     edit_mode = getattr(state, 'edit_mode', False)
 
                                     if bill_exists and not edit_mode:
-                                        with ui.row().classes('w-full items-start'):
-                                        # READ-ONLY VIEW
-                                            with ui.column().classes('w-2/3 gap-1'):
-                                                ui.label('✅ Bill Details').classes('font-bold text-green-800')
-                                                ui.label(f"Pre. Reading: {bill_exists.get('prev_reading')} kWh").classes('text-sm')
-                                                ui.label(f"Cur. Reading: {bill_exists.get('curr_reading')} kWh").classes('text-sm')
-                                                ui.label(f"Extra unit : {bill_exists.get('extra_units', 0)}").classes('text-sm')
-                                                ui.label(f"Rate: ₹{bill_exists.get('rate_per_unit')}").classes('text-sm')
-                                                ui.label(f"Total Consumed: {bill_exists.get('total_consumed_units', 0)} Units").classes('text-sm font-bold text-blue-800')
-                                                ui.label(f"Total Amount: ₹ {bill_exists.get('total_amount', 0)}").classes('text-lg font-black text-green-900')
 
-                                            with ui.column().classes('w-1/3 items-end'):
-                                                img_url = bill_exists.get('bill_img_url')
-                                                if img_url:
-                                                    ui.image(img_url).classes('w-20 h-20 rounded border shadow-sm')
-                                                else:
-                                                    ui.label("No Image").classes('text-[10px] text-gray-400')
-                                        # READ-ONLY VIEW KE ANDAR
-                                        with ui.row().classes('w-full gap-2 mt-4'):
-                                            ui.button('EDIT BILL', on_click=lambda: (setattr(state, 'edit_mode', True), main_container.refresh())) \
-                                                .classes('flex-1 bg-orange-600 text-white font-bold')
-                                                
-                                            ui.button('📤 Share WA', on_click=lambda: share_bill_on_whatsapp(bill_exists, state.renter_id)) \
-                                                .classes('flex-1 bg-green-600 text-white font-bold')                      
+                                        if str( bill_exists.get('status', '')).lower() == 'approved':
+                                                with ui.row().classes('w-full items-start'):
+                                                    with ui.card().classes( 'w-full p-3 bg-white border-2  shadow-sm'):
+                                                        ui.label( f'Billing Details for {bill_exists["bill_month"]} {bill_exists["bill_year"]}').classes(' font-black text-green-800')
+                                                        ui.separator().classes('my-1')
+                                                        img_url = bill_exists.get('bill_img_url')
+                                                        if img_url:
+                                                            with ui.row().classes( 'w-full justify-center my-2' ):
+                                                                ui.image( img_url).classes( 'w-full h-75 rounded-xl border shadow-md mb-3')
+                                                        # Row 1
+                                                        with ui.grid(columns=2).classes( 'w-full gap-4 mt-3'):
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label(  'Previous Reading:').classes( ' font-black text-slate-700' )
+                                                                ui.label( str(  bill_exists.get(   'prev_reading_date',   ''  )  ) ).classes( 'text-blue-600  font-bold' )
+                                                                ui.label( f"{bill_exists.get('prev_reading',0)} KWh" ).classes(  ' font-medium text-gray-500' )
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label(  'Current Reading:' ).classes( ' font-black text-slate-900' )
+                                                                ui.label(  str(  bill_exists.get( 'curr_reading_date',  '')   ) ).classes(  'text-blue-600  font-bold'  )
+                                                                ui.label( f"{bill_exists.get('curr_reading',0)} KWh" ).classes(' font-medium text-gray-500')
+                                                        # Row 2
+                                                        with ui.grid(columns=2).classes('w-full gap-2 mt-1' ):
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label('Extra Unit:' ).classes( ' font-black text-slate-700' )
+                                                                ui.label(str( bill_exists.get(  'extra_units',   0 )  ) ).classes( ' font-medium text-gray-500')
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label( 'Total Consumed Unit:'  ).classes( ' font-black text-slate-700' )
+                                                                ui.label( f"{bill_exists.get('total_consumed_units',0)} Units").classes( ' font-black text-gray-500' )
+
+                                                        # Row 3
+                                                        with ui.grid(columns=2).classes('w-full gap-2 mt-1'):
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label( 'Rate:' ).classes( ' font-black text-slate-700')
+                                                                ui.label( f"₹ {float(bill_exists.get('rate_per_unit',0)):.2f}" ).classes(' font-medium text-gray-500')
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label( 'Total Amount:').classes( 'font-black text-slate-700')
+                                                                ui.label(  f"₹ {float(bill_exists.get('total_amount',0)):.2f}" ).classes( 'font-black text-orange-500')
+                                                   
+                                                # READ-ONLY VIEW KE ANDAR
+                                                with ui.row().classes('w-full gap-2 mt-4'):
+                                                    ui.button('EDIT ', on_click=lambda: (setattr(state, 'edit_mode', True), main_container.refresh())) \
+                                                        .classes('flex-1 bg-orange-600 text-white font-bold')
+                                                        
+                                                    ui.button('💬 Share ', on_click=lambda: share_bill_on_whatsapp(bill_exists, state.renter_id)) \
+                                                        .classes('flex-1 bg-green-600 text-white font-bold')                      
+                                        elif str( bill_exists.get('status', '')).lower() == 'submitted':
+                                             with ui.card().classes( 'w-full p-4 bg-yellow-50 border-l-4 border-yellow-500' ):
+                                                ui.label('⏳ Customer Requested ' ).classes( 'text-lg font-bold text-yellow-700' )
+                                                ui.label('Owner approval pending .' ).classes('text-sm text-gray-600')
                                     else:
                                         # FORM VIEW (EDITABLE)
                                         
@@ -2018,18 +1806,26 @@ def main_page():
 
                                         ui.label(f"Previous Reading: {show_prev_read}").classes('font-bold text-gray-700')
                                         ui.label(f"Date: {show_prev_date}").classes('text-[10px] text-blue-600 mb-2')
+                                        rate_cfg = (
+                                            supabase.table("hub_users")
+                                            .select("default_rate")
+                                            .eq("id", 3)
+                                            .single()
+                                            .execute())
+                                        cfg = rate_cfg.data.get("default_rate", {})
+                                        default_rate = (  cfg.get("electric_rate")  if state.bill_type == "Electric" else cfg.get("gas_rate"))
 
                                         kwh_input = ui.input('Current Reading', value=bill_exists.get('curr_reading', '') if bill_exists else '').props('outlined dense type="number"')
-                                        rate_input = ui.input('Rate per unit', value=bill_exists.get('rate_per_unit', '9.0')if bill_exists else '9.0').props('outlined dense type="number"')
+                                        rate_input = ui.input(  'Rate per unit',value=bill_exists.get('rate_per_unit', default_rate)  if bill_exists else default_rate).props('outlined dense type="number"')
                                         extra_input = ui.input('Extra Units', value=bill_exists.get('extra_units', '0') if bill_exists else '0').props('outlined dense type=number')
                                         def save_bill():
                                             try:
                                                 curr_val = float(kwh_input.value or 0)
-                                                rate_val = float(rate_input.value or 9.0)
+                                                rate_val = float(rate_input.value or default_rate)
                                                 actual_prev = bill_exists.get('prev_reading', float(c_prev_read)) if bill_exists else float(c_prev_read)
                                                 actual_prev_date = bill_exists.get('prev_reading_date', c_prev_date) if bill_exists else c_prev_date
 
-                                               
+                                                
                                                 current_head = state.active_renter_head_id
                                                 if not current_head:
                                                     # Emergency fetch agar state mein nahi hai
@@ -2043,7 +1839,7 @@ def main_page():
                                                     "prev_reading": float(actual_prev), "curr_reading": curr_val,
                                                     "rate_per_unit": rate_val,
                                                     "extra_units": int(extra_input.value or 0),
-                                                    "status": "Submitted",
+                                                    "status": "Approved",
                                                     "head_id": current_head,
                                                     "room_no": state.selected_room,
                                                     "prev_reading_date": actual_prev_date,
@@ -2072,6 +1868,7 @@ def main_page():
                                             .select('bill_month, bill_year') \
                                             .eq('renter_id', state.renter_id) \
                                             .eq('bill_type', state.bill_type) \
+                                            .eq('status', 'Approved') \
                                             .execute()
                                         
                                         if res.data:
@@ -2105,74 +1902,141 @@ def main_page():
                                                 .eq('renter_id', state.renter_id) \
                                                 .eq('bill_type', state.bill_type) \
                                                 .eq('bill_month', q_month) \
-                                                .eq('bill_year', q_year).execute()
+                                                .eq('bill_year', q_year)\
+                                                .eq('status', 'Approved') \
+                                                .execute()
                                             if resp.data: hist_data = resp.data[0]
                                         except Exception as e:
                                             print("Data Query Error:", e)
 
                                     # 4. Display UI
-                                    with ui.card().classes('w-full p-4 bg-white border rounded-lg shadow-sm'):
-                                        ui.label(f"{state.history_month} Record").classes('text-green-800 font-bold mb-2 underline')
-                                        with ui.row().classes('w-full items-start'):
-                                            with ui.column().classes('w-2/3'):
-                                                ui.label(f"Prev Reading: {hist_data.get('prev_reading', 'N/A') if hist_data else 'N/A'} kWh").classes('font-bold')
-                                                ui.label(f"{hist_data.get('prev_reading_date', 'N/A') if hist_data else 'N/A'}").classes('text-[10px] text-blue-600 mb-0')
-                                                ui.label(f"Curr Reading: {hist_data.get('curr_reading', 'N/A') if hist_data else 'N/A'} kWh").classes('font-bold')
-                                                ui.label(f"{hist_data.get('curr_reading_date', 'N/A') if hist_data else 'N/A'}").classes('text-[10px] text-blue-600 mb-1')
-                                                ui.separator().classes('my-1')
-                                                ui.label(f"Rate: ₹ {hist_data.get('rate_per_unit', 'N/A') if hist_data else 'N/A'}")
-                                                ui.label(f"Extra Units: {hist_data.get('extra_units', 'N/A') if hist_data else 'N/A'}")
-                                                ui.label(f"Total Consumed: {hist_data.get('total_consumed_units', 'N/A') if hist_data else 'N/A'} Units").classes('font-bold text-blue-800')
-                                                ui.label(f"Total Amount: ₹ {hist_data.get('total_amount', 'N/A') if hist_data else 'N/A'}").classes('text-lg font-black text-green-800')
+                                    with ui.row().classes('w-full items-start'):
+                                        with ui.card().classes( 'w-full p-3 bg-white border-2  shadow-sm'):
+                                            ui.label(f"{state.history_month} Record").classes('text-green-900 font-bold mb-2 underline')
+                                            ui.separator().classes('my-1')
+                                            img_url = hist_data.get('bill_img_url')
+                                            if img_url:
+                                                with ui.row().classes( 'w-full justify-center my-2' ):
+                                                    ui.image( img_url).classes( 'w-full h-75 rounded-xl border shadow-md mb-3')
+                                                    # Row 1
+                                            with ui.grid(columns=2).classes( 'w-full gap-4 mt-3'):
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label(  'Previous Reading:').classes( ' font-black text-slate-700' )
+                                                        ui.label( str(  hist_data.get(   'prev_reading_date',   ''  )  ) ).classes( 'text-blue-600  font-bold' )
+                                                        ui.label( f"{hist_data.get('prev_reading',0)} KWh" ).classes(  ' font-medium text-gray-500' )
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label(  'Current Reading:' ).classes( ' font-black text-slate-900' )
+                                                        ui.label(  str(  hist_data.get( 'curr_reading_date',  '')   ) ).classes(  'text-blue-600  font-bold'  )
+                                                        ui.label( f"{hist_data.get('curr_reading',0)} KWh" ).classes(' font-medium text-gray-500')
+                                                            # Row 2
+                                            with ui.grid(columns=2).classes('w-full gap-2 mt-1' ):
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label('Extra Unit:' ).classes( ' font-black text-slate-700' )
+                                                        ui.label(str( hist_data.get(  'extra_units',   0 )  ) ).classes( ' font-medium text-gray-500')
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label( 'Total Consumed Unit:'  ).classes( ' font-black text-slate-700' )
+                                                        ui.label( f"{hist_data.get('total_consumed_units',0)} Units").classes( ' font-black text-gray-500' )
 
-                                            # Right: Image Preview
-                                            with ui.column().classes('w-1/3 items-end'):
-                                                img_url = hist_data.get('bill_img_url') if hist_data else None
-                                                if img_url:
-                                                    ui.image(img_url).classes('w-20 h-20 rounded border shadow-sm')
-                                                else:
-                                                    ui.label("No Image").classes('text-[10px] text-gray-400')
+                                                            # Row 3
+                                            with ui.grid(columns=2).classes('w-full gap-2 mt-1'):
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label( 'Rate:' ).classes( ' font-black text-slate-700')
+                                                        ui.label( f"₹ {float(hist_data.get('rate_per_unit',0)):.2f}" ).classes(' font-medium text-gray-500')
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label( 'Total Amount:').classes( 'font-black text-slate-700')
+                                                        ui.label(  f"₹ {float(hist_data.get('total_amount',0)):.2f}" ).classes( 'font-black text-orange-500')
+                                            
+                                       
                                 elif state.billing_tab == "requested":
-                                    # Fetching logic: Jo 'SUBMITTED' hai wo uthao
-                                    req_data = None
-                                    try:
-                                        resp = supabase.table('utility_billing_ledger') \
-                                            .select('*') \
-                                            .eq('renter_id', state.renter_id) \
-                                            .ilike('status_image', 'SUBMITTED%') \
-                                            .execute()
-                                        if resp.data: req_data = resp.data[0]
-                                    except: pass
+                                        try:
+                                            requests_data = (
+                                                supabase.table("utility_billing_ledger")
+                                                .select("*")
+                                                .eq("renter_id", state.renter_id)
+                                                .eq("room_no", state.room_no)
+                                                .eq("bill_type", state.bill_type)
+                                                .eq("bill_month", state.selected_month)
+                                                .eq("bill_year", datetime.now().year)
+                                                .eq("status", "Submitted")
+                                                .order("id", desc=True)
+                                                .execute())
+                                            rows = requests_data.data or []
+                                        except Exception as e:
+                                            ui.notify(str(e))
+                                            rows = []
+                                        if not rows:
+                                            ui.label("No Pending Requests").classes( "text-center text-gray-500 w-full")
+                                        for row in rows:
+                                            head_name = "Unknown"
+                                            try:
+                                                if row.get("head_id"):
+                                                    h = (
+                                                        supabase.table("public_members")
+                                                        .select("name")
+                                                        .eq("id", row["head_id"])
+                                                        .single()
+                                                        .execute()  )
+                                                    if h.data:
+                                                        head_name = h.data["name"]
+                                            except:
+                                                pass
+                                            with ui.card().classes('w-full p-4 border rounded-lg bg-gray-50 shadow-inner mt-1' ):
+                                                ui.label( f"Room {row.get('room_no')} | {row.get('bill_month')} {row.get('bill_year')}" ).classes( 'text-sm font-bold text-emerald-800 mb-3 border-b pb-1 w-full' )
+                                                if row.get("bill_img_url"):
+                                                    ui.image(row["bill_img_url"] ).classes(  "w-full rounded-lg mb-3 border"  )
+                                                prev_reading = row.get('prev_reading')
+                                                curr_reading = row.get('curr_reading')
+                                                extra_units = row.get( 'extra_units',  0 )
+                                                rate = row.get('rate_per_unit')
 
-                                    if req_data:
-                                        raw_val = req_data.get('status_image', 'SUBMITTED|0|N/A')
-                                        parts = raw_val.split('|')
-                                        reading_val = parts[1] if len(parts) > 1 else '0'
-                                        
-                                        ui.label("🔔 Renter Submission Pending").classes('text-amber-800 font-bold mb-2')
-                                        
-                                        # Reading input (Owner yahan edit karega)
-                                        reading_input = ui.input('Final Reading', value=reading_val).props('outlined dense type=number')
-                                        ui.label(f"Submitted Date: {parts[2] if len(parts) > 2 else 'N/A'}").classes('text-[10px] text-gray-500 mb-4')
+                                                with ui.grid(columns=2).classes( 'w-full gap-y-4 text-[14px] text-gray-700' ):                                                              
+                                                    with ui.column().classes('gap-0'):
+                                                        ui.label('Previous Reading:').classes( 'font-bold text-gray-900' )
+                                                        ui.label( f"{prev_reading} KWh" ).classes( 'text-gray-500 font-medium')
+                                                        ui.label(str(row.get('prev_reading_date',''))  ).classes( 'text-[10px] text-gray-400')                                                                                                                                           
+                                                    with ui.column().classes('gap-0'):
 
-                                        # Image Preview (Same logic as current/history)
-                                        if req_data.get('bill_img_url'):
-                                            ui.image(req_data.get('bill_img_url')).classes('w-24 h-24 rounded border mb-4')
-                                        else:
-                                            ui.label("No Image Attached").classes('text-xs text-gray-400 mb-4')
-
-                                        # Action Buttons
-                                        with ui.row().classes('w-full gap-2'):
-                                            ui.button('APPROVE', on_click=lambda: update_status(req_data['id'], reading_input.value, 'APPROVED')).classes('bg-green-600 flex-grow')
-                                            ui.button('REJECT', on_click=lambda: update_status(req_data['id'], '0', 'REJECTED')).classes('bg-red-600 flex-grow')
-                                    else:
-                                        ui.label("No pending submissions").classes('text-center w-full mt-10 text-gray-500')
-
-                                    def update_status(row_id, final_reading, status):
-                                        # New format: "STATUS|READING|DATE"
-                                        new_val = f"{status}|{final_reading}|{datetime.now().strftime('%Y-%m-%d')}"
-                                        supabase.table('utility_billing_ledger').update({'status_image': new_val}).eq('id', row_id).execute()
-                                        main_container.refresh()
+                                                        curr_input = ui.input( 'Current Reading', value=str(curr_reading or 0) ).props(  'outlined dense type=number' ).classes('w-full')
+                                                        ui.label(str(row.get('curr_reading_date','')) ).classes('text-[10px] text-gray-400 ml-1')
+                                                    extra_input = ui.input( 'Extra Unit', value=str(extra_units or 0)).props(  'outlined dense type=number').classes('w-full')
+                                                    rate_cfg = (
+                                                        supabase.table("hub_users")
+                                                        .select("default_rate")
+                                                        .eq("id", 3)
+                                                        .single()
+                                                        .execute())
+                                                    cfg = rate_cfg.data.get("default_rate", {})
+                                                    default_rate = (  cfg.get("electric_rate") if row.get("bill_type") == "Electric" else cfg.get("gas_rate"))
+                                                    rate_input = ui.input( 'Rate Per Unit', value=str(rate or default_rate)).props( 'outlined dense type=number').classes('w-full')                                                                                                
+                                                ui.separator().classes('my-2')
+                                                def approve_bill(bill_id=row["id"]):
+                                                    try:
+                                                        supabase.table( "utility_billing_ledger").update({
+                                                            "curr_reading":
+                                                            float(curr_input.value or 0),
+                                                            "extra_units":
+                                                            float(extra_input.value or 0),
+                                                            "rate_per_unit":
+                                                            float(rate_input.value or 0),
+                                                            "status":
+                                                            "Approved" }).eq( "id",bill_id).execute()
+                                                        ui.notify(  "Bill Approved", type="positive" )
+                                                        main_container.refresh()
+                                                    except Exception as e:
+                                                        ui.notify(str(e),type="negative")
+                                                def reject_bill(
+                                                    bill_id=row["id"] ):
+                                                    try:
+                                                        supabase.table(  "utility_billing_ledger" ).update({ "status": "Rejected" }).eq(  "id", bill_id).execute()
+                                                        ui.notify("Bill Rejected",  type="warning"  )
+                                                        main_container.refresh()
+                                                    except Exception as e:
+                                                        ui.notify(  str(e), type="negative" )
+                                                with ui.row().classes(  "w-full mt-3 gap-2" ):
+                                                    ui.button( "✅ Approve",on_click=approve_bill ).classes( "flex-1 bg-green-600 text-white"  )
+                                                    ui.button(  "❌ Reject",on_click=reject_bill ).classes("flex-1 bg-red-600 text-white" )
+                
+                
                         # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
                         # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
                         elif state.room_sub_tab == "settings":
@@ -2221,6 +2085,7 @@ def main_page():
                                                     "electric_history_enabled": state.electric_history_enabled,
                                                     "gas_history_enabled": e.value  } }).eq( "id", state.renter_id ).execute()
                                         ui.switch('Show History Data Tab', value=state.gas_history_enabled , on_change=save_gas_toggle)
+
                 # 🎓 SCREEN 5: EDUCATION PORTAL
                 elif state.current_screen == "education_view":
                     ui.label("Education Portal").classes('text-base font-black text-slate-800 w-full')
@@ -2275,4 +2140,4 @@ def main_page():
 
 if __name__ in {"__main__", "__mp_main__"}:
     app.add_static_files('/static', 'static')
-    ui.run(title='Morya Mobile Hub', port=8080, host='0.0.0.0', storage_secret='morya_master_999')
+    ui.run(title='Morya  Mobile Hub', port=8080, host='0.0.0.0', storage_secret='morya_master_999')
