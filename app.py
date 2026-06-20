@@ -11,6 +11,7 @@ from nicegui import ui
 from supabase import create_client, Client
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 FIREBASE_SERVER_KEY = os.environ.get("FIREBASE_SERVER_KEY")
 
@@ -55,6 +56,7 @@ class MasterHubState:
         self.scanned_meter_photo = None
         self.ocr_current_reading = ""
         self.scanned_image_url = ""
+        self.login_filter = None
 
 
         # Room ke sabhi heads (Active + History) load karne ke liye dropdown state
@@ -241,6 +243,11 @@ def main_page():
                     state.selected_head_option = options_list[0]['value']
                 else:
                     state.selected_head_option = None
+                     # vacant room fix
+                    state.renter_id = None
+                    state.active_renter_head_id = None
+                    state.room_no = room_no_val
+
             except Exception as e:
                 print("Head history error:", e)
         
@@ -288,15 +295,15 @@ def main_page():
             if user_data.data:
                 state.user_role = user_data.data.get('role', 'admin') 
                 state.account_status = user_data.data.get('status', 'ACTIVE')
+                app.storage.user['logged_in'] = True
+                app.storage.user['email'] = state.email
+                app.storage.user['role'] = state.user_role
             ui.notify(f'Logged in as {str(state.user_role).upper()}', type='positive')
             sidebar_content.refresh()
             main_container.refresh()
         except Exception as e:
             ui.notify('Session expired ya Invalid OTP', type='negative')
 
-        app.storage.user['logged_in'] = True
-        app.storage.user['email'] = state.email
-        state.is_logged_in = True
 
     def logout():
         app.storage.user.clear()
@@ -498,7 +505,9 @@ def main_page():
                         with ui.row().classes('items-center gap-3 w-full p-2 cursor-pointer hover:bg-green-50 rounded-xl').on('click', lambda: (setattr(state, 'current_screen', 'manage_admins'), sidebar.toggle(), main_container.refresh())):
                             ui.icon('manage_accounts', size='20px').classes('text-green-800')
                             ui.label('Manage Admins (Dev)').classes('text-xs font-bold text-slate-700')
-                            
+                        with ui.row().classes( 'items-center gap-3 w-full p-2 cursor-pointer hover:bg-green-50 rounded-xl' ).on( 'click', lambda: (  setattr(state, 'current_screen', 'login_history'), sidebar.toggle(), main_container.refresh() ) ):
+                                ui.icon('history', size='20px').classes('text-green-800')
+                                ui.label('Login History').classes(   'text-xs font-bold text-slate-700')
                     ui.button('Logout App', on_click=logout).props('type=button').classes('w-full mt-4 bg-rose-600 text-white font-bold rounded-xl h-9 text-xs')
         sidebar_content()
 
@@ -640,6 +649,9 @@ def main_page():
                         main_container.refresh()
 
                     def open_room(room_no):
+                        state.renter_id = None
+                        state.active_renter_head_id = None
+                        state.selected_head_option = None
                         setattr(state, 'selected_room', room_no)
                         setattr(state, 'room_sub_tab', None)
                         setattr(state, 'member_view', 'list')
@@ -824,36 +836,45 @@ def main_page():
                         
                         if not is_active_present:
                             def handle_new_head():
-                                try:
-                                    res = supabase.table("renters").insert({
-                                        "room_no": state.selected_room,
-                                        "status": "ACTIVE"
-                                    }).execute()
-
-                                    if not res.data:
-                                        ui.notify("Renter creation failed", type="negative")
-                                        return
-
-                                    new_renter_id = res.data[0]["id"]
-
-                                    
-                                    state.room_no = state.selected_room
-                                    state.active_renter_head_id = None
-
-                                    fetch_room_heads_history(state.selected_room)
-
-                                    state.selected_head_option = new_renter_id 
-                                    state.renter_id = new_renter_id
-
-                                    
-
-                                    state.dynamic_family_members.clear()
-                                    state.member_view = "add"
-
-                                    main_container.refresh()
-
-                                except Exception as e:
-                                    ui.notify(f"Error: {e}", type="negative")
+                                with ui.dialog() as dialog, ui.card().classes('w-80 p-4'):
+                                    ui.label('Create New Head').classes('text-lg font-bold')
+                                    email_input = ui.input(  label='Email' ).props('outlined dense type=email').classes('w-full')
+                                    def save_head():
+                                        
+                                        email_val = str(email_input.value or '').strip().lower()
+                                        if not email_val:
+                                            ui.notify('Email required', type='warning')
+                                            return
+                                        try:
+                                            room_no = str(state.selected_room).strip()
+                                            ROOM_QR = {
+                                                "1": "GSEVEH",
+                                                "2": "KAJVWV",
+                                                "3": "WJSNWH",
+                                                "4": "LAGSGE",
+                                                "5": "IWJSY1",
+                                                "6": "YSHFJ5",
+                                                "7": "MJ5DHL", }
+                                            res = supabase.table("renters").insert({  "room_no": room_no,  "status": "ACTIVE", "email": email_val,  "qr_token": ROOM_QR.get(room_no)}).execute()
+                                            if not res.data:
+                                                ui.notify("Renter creation failed", type="negative")
+                                                return
+                                            new_renter_id = res.data[0]["id"]
+                                            state.room_no = state.selected_room
+                                            state.active_renter_head_id = None
+                                            fetch_room_heads_history(state.selected_room)
+                                            state.selected_head_option = new_renter_id
+                                            state.renter_id = new_renter_id
+                                            state.dynamic_family_members.clear()
+                                            state.member_view = "add"
+                                            dialog.close()
+                                            main_container.refresh()
+                                        except Exception as e:
+                                            ui.notify(f"Error: {e}", type="negative")
+                                    with ui.row().classes('w-full justify-end gap-2'):
+                                        ui.button('Cancel', on_click=dialog.close)
+                                        ui.button(  'Save',on_click=save_head ).classes('bg-green-700 text-white')
+                                dialog.open()
                             
                             ui.button('+ New Head', on_click=handle_new_head).props('flat dense').classes('text-green-700 font-bold text-xs')
 
@@ -1101,7 +1122,8 @@ def main_page():
                                                                             elif k == 'PS': ps_val = v
                                                                             elif k == 'PO': po_val = v
                                                                             elif k == 'Dist': dt_val = v
-                                                                            elif k == 'State': st_val = v
+                                                                            elif k == 'State':
+                                                                                 st_val = '' if v in [None, 'None', 'null'] else v
                                                                             elif k == 'Pin': pin_val = v
                                                                 else:
                                                                     v_val = raw_addr
@@ -1129,14 +1151,19 @@ def main_page():
                                                                     'email_v': email_val,
                                                                     'adh_v': m_data.get('aadhaar', ''),
                                                                     'relig_v': m_data.get('religion', ''),
-                                                                    'v_v': v_val, 'panch_v': pan_val, 'block_v': blk_val,
-                                                                    'ps_v': ps_val, 'po_v': po_val, 'dt_v': dt_val,
-                                                                    'st_v': st_val, 'pin_v': pin_val,
+                                                                    'v_v': v_val or '',
+                                                                    'panch_v': pan_val or '',
+                                                                    'block_v': blk_val or '',
+                                                                    'ps_v': ps_val or '',
+                                                                    'po_v': po_val or '',
+                                                                    'dt_v': dt_val or '',
+                                                                    'st_v': st_val if st_val else 'Bihar',                                                                  
+                                                                    'pin_v': pin_val or '',
                                                                     'show_addr': m_data.get('relation') in ['Staff', 'Others', 'Head']
                                                                 }]
                                                                 setattr(state, 'member_view', 'add')
                                                                 main_container.refresh()
-
+                                                                print("EDIT DATA =", state.dynamic_family_members)
                                                             ui.button('Modify', on_click=lambda m=member: trigger_modify(m)).props('dense unelevated color=blue-600 icon=edit').classes('text-xs font-bold rounded-lg px-3')
                                                             
                                                             def trigger_delete(member_uuid=m_id, name=m_name, relation=m_rel):
@@ -1171,6 +1198,7 @@ def main_page():
                                         
                                         @ui.refreshable
                                         def sub_members_ui():
+
                                             if not state.dynamic_family_members:
                                                 if not state.active_renter_head_id:
                                                     state.dynamic_family_members.append({
@@ -1209,8 +1237,10 @@ def main_page():
                                                         ui.input('Mobile').props('outlined dense   type=tel inputmode=numeric mask="##########"').bind_value(m_state, 'mob_v')
                                                         # --- WhatsApp Input (Sirf Head ya Staff/Others ke liye) ---
                                                         ui.input('WhatsApp No').props('outlined dense  type=tel inputmode=numeric mask="##########"').bind_value(m_state, 'whatsapp_v')
-                                                        if m_state.get('rel_v') == 'Head':
-                                                            ui.input('Email ID').props('outlined dense type="email"').bind_value(m_state, 'email_v')
+                                                        if (  m_state.get('rel_v') == 'Head'  and state.active_renter_head_id):
+                                                            ui.input('Email ID')\
+                                                                .props('outlined dense type="email"')\
+                                                                .bind_value(m_state, 'email_v')
                                                         ui.input('Aadhaar').props('outlined dense  type=tel inputmode=numeric mask="####-####-####"').bind_value(m_state, 'adh_v')
                                                     
                                                     if m_state.get('show_addr') or m_state.get('rel_v') == 'Head':
@@ -1219,8 +1249,8 @@ def main_page():
                                                             ui.label('Address Details').classes('text-[10px] font-bold text-emerald-600')
                                                             with ui.grid(columns=2).classes('w-full gap-2'):
                                                                 INDIA_STATES = [  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar',  'Chhattisgarh','Goa','Gujarat','Haryana',  'Himachal Pradesh','Jharkhand','Karnataka','Kerala', 'Madhya Pradesh','Maharashtra','Manipur','Meghalaya', 'Mizoram','Nagaland','Odisha','Punjab',   'Rajasthan','Sikkim','Tamil Nadu','Telangana', 'Tripura','Uttar Pradesh','Uttarakhand',   'West Bengal','Delhi']
-                                                                ui.select( INDIA_STATES,  label='State', value=m_state.get('st_v') or 'Bihar').props('outlined dense').bind_value(m_state, 'st_v')
-                                                                ui.input('District').props('outlined dense')
+                                                                ui.select( INDIA_STATES,  label='State',  value=(m_state.get('st_v') if m_state.get('st_v') in INDIA_STATES else 'Bihar')).props('outlined dense').bind_value(m_state, 'st_v')                                                               
+                                                                ui.input('District').props('outlined dense').bind_value(m_state, 'dt_v')
                                                                     
                                                                 ui.input('Block').props('outlined dense').bind_value(m_state, 'block_v')
 
@@ -1282,6 +1312,8 @@ def main_page():
                                                                 renter_payload['email'] = str(m['email_v']).strip().lower()
                                                             supabase.table('renters').update(  renter_payload).eq(   'id',  state.renter_id).execute()
                                                             state.active_renter_head_id = m['edit_id']
+                                                            fetch_room_heads_history(state.selected_room)
+                                                            state.selected_head_option = state.renter_id
                                                     else: 
                                                         row_data["status"] = "Pending" 
                                                         insert_response = supabase.table('public_members').insert([row_data]).execute()
@@ -1293,7 +1325,9 @@ def main_page():
 
                                                             supabase.table('renters').update(  renter_payload).eq(  'id',  state.renter_id).execute()
                                                             state.active_renter_head_id = head_uuid
-                                                
+                                                            fetch_room_heads_history(state.selected_room)
+                                                            state.selected_head_option = state.renter_id
+                                                fetch_room_heads_history(state.selected_room)
                                                 ui.notify('Record Processed successfully!', type='positive')
                                                 setattr(state, 'member_view', 'list')
                                                 main_container.refresh()
@@ -2038,7 +2072,6 @@ def main_page():
                 
                 
                         # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
-                        # --- ⚙️ TAB 5: SETTINGS SYSTEM MANAGEMENT ---
                         elif state.room_sub_tab == "settings":
                             rent_row = supabase.table( "renters").select(  "setting_tab").eq("id", state.renter_id).single().execute()
                             setting_json = rent_row.data.get("setting_tab") or {}
@@ -2052,7 +2085,9 @@ def main_page():
                                         try:
                                             supabase.table('renters').update({"status": new_status}).eq('id', state.renter_id).execute()
                                             ui.notify(f"Status changed to {new_status}", type='positive')
-                                            main_container.refresh()
+                                            fetch_room_heads_history(state.selected_room)
+                                            state.selected_head_option = state.renter_id
+                                            universal_refresh()
                                         except Exception as e:
                                             ui.notify(f"Update failed: {e}", type='negative')
 
@@ -2085,7 +2120,195 @@ def main_page():
                                                     "electric_history_enabled": state.electric_history_enabled,
                                                     "gas_history_enabled": e.value  } }).eq( "id", state.renter_id ).execute()
                                         ui.switch('Show History Data Tab', value=state.gas_history_enabled , on_change=save_gas_toggle)
+                elif state.current_screen == "login_history":
 
+                    with ui.row().classes('w-full justify-between items-center mb-2'):
+                        ui.button(
+                            '⬅ Back',
+                            on_click=lambda: (
+                                setattr(state,'current_screen','main_hub'),
+                                main_container.refresh()
+                            )
+                        ).props('flat dense').classes(
+                            'text-green-800 font-bold text-xs'
+                        )
+
+                        ui.label('Developer Only').classes(
+                            'text-[10px] font-black text-red-500'
+                        )
+
+                    ui.label(
+                        'Login Activity Dashboard'
+                    ).classes(
+                        'text-lg font-black text-slate-800'
+                    )
+
+                    try:
+
+                        if not hasattr(state, 'login_filter'):
+                            state.login_filter = None
+
+                        logs = (
+                            supabase
+                            .table('login_logs')
+                            .select('*')
+                            .order('created_at', desc=True)
+                            .limit(300)
+                            .execute()
+                        )
+
+                        rows = logs.data or []
+
+                        total_success = len(
+                            [x for x in rows if str(x.get('status','')).lower() == 'success']
+                        )
+
+                        total_failed = len(
+                            [x for x in rows if str(x.get('status','')).lower() == 'failed']
+                        )
+
+                        unique_users = len(
+                            set(
+                                [
+                                    x.get('email')
+                                    for x in rows
+                                    if x.get('email')
+                                ]
+                            )
+                        )
+
+                        with ui.row().classes('w-full gap-2'):
+
+                            with ui.card().classes(
+                                'flex-1 p-3 bg-green-50 border rounded-xl cursor-pointer'
+                            ).on(
+                                'click',
+                                lambda: (
+                                    setattr(state,'login_filter','success'),
+                                    main_container.refresh()
+                                )
+                            ):
+                                ui.label(str(total_success)).classes(
+                                    'text-xl font-black text-green-700'
+                                )
+                                ui.label('Success')
+
+                            with ui.card().classes(
+                                'flex-1 p-3 bg-red-50 border rounded-xl cursor-pointer'
+                            ).on(
+                                'click',
+                                lambda: (
+                                    setattr(state,'login_filter','failed'),
+                                    main_container.refresh()
+                                )
+                            ):
+                                ui.label(str(total_failed)).classes(
+                                    'text-xl font-black text-red-700'
+                                )
+                                ui.label('Failed')
+
+                            with ui.card().classes(
+                                'flex-1 p-3 bg-blue-50 border rounded-xl cursor-pointer'
+                            ).on(
+                                'click',
+                                lambda: (
+                                    setattr(state,'login_filter',None),
+                                    main_container.refresh()
+                                )
+                            ):
+                                ui.label(str(unique_users)).classes(
+                                    'text-xl font-black text-blue-700'
+                                )
+                                ui.label('Users')
+
+                        filtered_rows = rows
+
+                        if state.login_filter == 'success':
+                            filtered_rows = [
+                                x for x in rows
+                                if str(x.get('status','')).lower() == 'success'
+                            ]
+
+                        elif state.login_filter == 'failed':
+                            filtered_rows = [
+                                x for x in rows
+                                if str(x.get('status','')).lower() == 'failed'
+                            ]
+
+                        with ui.row().classes(
+                            'w-full justify-between items-center mt-2'
+                        ):
+
+                            ui.label(
+                                f"Showing : {state.login_filter.upper()}"
+                                if state.login_filter
+                                else "Showing : ALL"
+                            ).classes(
+                                'text-xs font-bold text-green-700'
+                            )
+
+                            ui.button(
+                                'Reset',
+                                on_click=lambda: (
+                                    setattr(state,'login_filter',None),
+                                    main_container.refresh()
+                                )
+                            ).props('flat dense').classes(
+                                'text-xs'
+                            )
+
+                        search_box = ui.input(
+                            'Search Email'
+                        ).classes('w-full')
+
+                        with ui.card().classes(
+                            'w-full mt-3 p-0 rounded-xl'
+                        ):
+
+                            columns = [
+                                {
+                                    'name':'created_at',
+                                    'label':'Time',
+                                    'field':'created_at'
+                                },
+                                {
+                                    'name':'email',
+                                    'label':'Email',
+                                    'field':'email'
+                                },
+                                {
+                                    'name':'ip',
+                                    'label':'IP',
+                                    'field':'ip'
+                                },
+                                {
+                                    'name':'status',
+                                    'label':'Status',
+                                    'field':'status'
+                                },
+                                {
+                                    'name':'reason',
+                                    'label':'Reason',
+                                    'field':'reason'
+                                },
+                            ]
+
+                            table = ui.table(
+                                columns=columns,
+                                rows=filtered_rows,
+                                pagination=20
+                            ).classes('w-full')
+
+                            search_box.bind_value_to(
+                                table,
+                                'filter'
+                            )
+
+                    except Exception as e:
+                        ui.notify(
+                            f'History Error: {e}',
+                            type='negative'
+                        )
                 # 🎓 SCREEN 5: EDUCATION PORTAL
                 elif state.current_screen == "education_view":
                     ui.label("Education Portal").classes('text-base font-black text-slate-800 w-full')
